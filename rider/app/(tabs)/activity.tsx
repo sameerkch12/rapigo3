@@ -6,12 +6,14 @@ import {
   FlatList,
   Animated,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authService } from '@/services/auth.service';
 import { Colors, FontSize, FontWeight, Radius, Shadow } from '@/constants/theme';
 import Badge from '@/components/ui/Badge';
+import { ActivitySkeleton } from '@/components/ui/SkeletonLoader';
 
 const TABS = ['All', 'Completed', 'Cancelled'];
 
@@ -20,8 +22,10 @@ export default function ActivityScreen() {
   const [activeTab, setActiveTab] = useState('All');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [rides, setRides] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const fetchRides = async () => {
+    setLoading(true);
     try {
       const res = await authService.getProfile();
       if (res && res.user && Array.isArray(res.user.rides)) {
@@ -29,6 +33,8 @@ export default function ActivityScreen() {
       }
     } catch {
       setRides([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -37,11 +43,14 @@ export default function ActivityScreen() {
     fetchRides();
   }, [fadeAnim]);
 
-  const filteredRides = rides.map((ride: any) => ({
+  const filteredRides = rides
+    .slice()
+    .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .map((ride: any) => ({
     id: ride._id || ride.id,
     type: ride.vehicle || 'Ride',
     status: ride.status || 'completed',
-    date: ride.createdAt ? new Date(ride.createdAt).toLocaleString() : 'Recent',
+    date: ride.createdAt ? new Date(ride.createdAt).toLocaleDateString('en-GB') : 'Recent',
     from: ride.pickup || 'Pickup location',
     to: ride.destination || 'Destination',
     fare: ride.fare || 0,
@@ -58,16 +67,19 @@ export default function ActivityScreen() {
   const statusBg = (status: string) =>
     status === 'completed' ? Colors.successLight : status === 'cancelled' ? Colors.errorLight : Colors.warningLight;
 
-  const typeEmoji = (type: string) =>
-    type.toLowerCase().includes('bike') ? '🏍️' : type.toLowerCase().includes('auto') ? '🛺' : '🚗';
+  const vehicleImg = (type: string) => {
+    const t = type.toLowerCase();
+    if (t.includes('bike')) return require('@/assets/images/Bike.jpeg');
+    if (t.includes('auto')) return require('@/assets/images/Auto.jpeg');
+    if (t.includes('xl')) return require('@/assets/images/CarXL.jpeg');
+    return require('@/assets/images/Car.jpeg');
+  };
 
   const renderRide = ({ item, index }: any) => {
     return (
       <View style={styles.rideCard}>
         <View style={styles.rideLeft}>
-          <View style={styles.emojiWrap}>
-            <Text style={styles.rideEmoji}>{typeEmoji(item.type)}</Text>
-          </View>
+          <Image source={vehicleImg(item.type)} style={styles.vehicleIcon} resizeMode="contain" />
         </View>
         <View style={styles.rideContent}>
           <View style={styles.rideHeader}>
@@ -118,18 +130,22 @@ export default function ActivityScreen() {
         ))}
       </View>
 
-      <FlatList
-        data={filteredRides}
-        keyExtractor={(item) => item.id}
-        renderItem={renderRide}
-        contentContainerStyle={{ paddingBottom: 30 }}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <MaterialIcons name="history" size={48} color={Colors.text.light} />
-            <Text style={styles.emptyText}>No rides found in activity.</Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <ActivitySkeleton />
+      ) : (
+        <FlatList
+          data={filteredRides}
+          keyExtractor={(item) => item.id}
+          renderItem={renderRide}
+          contentContainerStyle={{ paddingBottom: 30 }}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <MaterialIcons name="history" size={48} color={Colors.text.light} />
+              <Text style={styles.emptyText}>No rides found in activity.</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -144,8 +160,7 @@ const styles = StyleSheet.create({
   activeTabText: { color: Colors.primary, fontWeight: FontWeight.bold },
   rideCard: { flexDirection: 'row', backgroundColor: '#FFF', borderRadius: Radius.md, padding: 14, marginBottom: 12, ...Shadow.sm, gap: 12 },
   rideLeft: { alignItems: 'center' },
-  emojiWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
-  rideEmoji: { fontSize: 20 },
+  vehicleIcon: { width: 40, height: 40, borderRadius: 20 },
   rideContent: { flex: 1 },
   rideHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rideType: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.text.primary },

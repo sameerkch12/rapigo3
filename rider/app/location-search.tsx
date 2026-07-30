@@ -51,7 +51,6 @@ export default function LocationSearchScreen() {
         console.warn('Coordinates fetch failed, using fallback:', e);
       }
 
-      // Default pickup if missing
       if (!ride.pickup) {
         setPickup({
           address: 'Current Location, Raipur',
@@ -73,6 +72,10 @@ export default function LocationSearchScreen() {
       setLoading(false);
     }
   };
+
+  const suggestionsWithMap = query.trim().length >= 3
+    ? [...suggestions, '---select-on-map---']
+    : suggestions;
 
   return (
     <View style={[styles.page, { paddingTop: insets.top + 12 }]}>
@@ -99,19 +102,47 @@ export default function LocationSearchScreen() {
       {!!error && <Text style={styles.error}>{error}</Text>}
 
       <FlatList
-        data={suggestions}
+        data={suggestionsWithMap}
         keyExtractor={(item, index) => index.toString()}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.row} onPress={() => select(item)}>
-            <MaterialIcons name="location-on" size={24} color={Colors.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.primary}>{item}</Text>
-            </View>
-          </TouchableOpacity>
-        )}
+        renderItem={({ item }) => {
+          if (item === '---select-on-map---') {
+            return (
+              <TouchableOpacity style={styles.mapRow} onPress={() => router.push('/select-on-map?type=destination')}>
+                <View style={styles.mapIconBox}>
+                  <MaterialIcons name="map" size={22} color={Colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.mapTitle}>Select on Map</Text>
+                  <Text style={styles.mapSubtitle}>Use map pin to set exact location</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={Colors.primary} />
+              </TouchableOpacity>
+            );
+          }
+          return (
+            <TouchableOpacity style={styles.row} onPress={() => select(item)}>
+              <MaterialIcons name="location-on" size={24} color={Colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.primary}>{item}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
         ListEmptyComponent={
           !loading && query.length >= 3 ? (
-            <Text style={styles.empty}>No matching locations found.</Text>
+            <View>
+              <Text style={styles.empty}>No matching locations found.</Text>
+              <TouchableOpacity style={styles.mapRow} onPress={() => router.push('/select-on-map?type=destination')}>
+                <View style={styles.mapIconBox}>
+                  <MaterialIcons name="map" size={22} color={Colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.mapTitle}>Select on Map</Text>
+                  <Text style={styles.mapSubtitle}>Use map pin to set exact location</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={Colors.primary} />
+              </TouchableOpacity>
+            </View>
           ) : null
         }
       />
@@ -145,4 +176,23 @@ const styles = StyleSheet.create({
   primary: { color: Colors.text.primary, fontWeight: FontWeight.bold, fontSize: FontSize.base },
   error: { color: Colors.error, marginTop: 16 },
   empty: { color: Colors.text.light, textAlign: 'center', marginTop: 28 },
+  mapRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  mapIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapTitle: { color: Colors.primary, fontWeight: FontWeight.bold, fontSize: FontSize.base },
+  mapSubtitle: { color: '#64748B', fontSize: 12, marginTop: 1 },
 });

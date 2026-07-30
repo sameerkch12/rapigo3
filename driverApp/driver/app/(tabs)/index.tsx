@@ -15,11 +15,12 @@ import { HeaderBar } from '../../components/HeaderBar';
 import { RideRequestFeedCard } from '../../components/RideRequestFeedCard';
 import { Colors, Shadows } from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { getPickupDistanceKm } from '../../utils/ride';
 
 export default function HomeFeedScreen() {
   const router = useRouter();
   const { driver } = useDriverAuth();
-  const { isOnline, requests, toggleOnline, fetchRequests, acceptRide, activeRide, fetchActiveRides } = useDriverRide();
+  const { isOnline, requests, toggleOnline, fetchRequests, acceptRide, activeRide, fetchActiveRides, dismissRequest, currentLocation } = useDriverRide();
   const [refreshing, setRefreshing] = useState(false);
 
   const isPending = driver?.verificationStatus === 'pending' || driver?.isVerified === false;
@@ -126,6 +127,9 @@ export default function HomeFeedScreen() {
                 key={req._id || req.id}
                 request={req}
                 onAccept={handleAcceptRide}
+                onReject={dismissRequest}
+                autoDismissSeconds={50}
+                pickupDistanceKm={currentLocation ? getPickupDistanceKm(currentLocation.latitude, currentLocation.longitude, req.pickupCoords || req.pickup) : 0}
               />
             ))
           ) : (

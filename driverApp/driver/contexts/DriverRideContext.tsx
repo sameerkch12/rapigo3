@@ -13,8 +13,10 @@ import {
 
 interface DriverRideContextType {
   isOnline: boolean;
+  isRestoringRide: boolean;
   activeRide: any | null;
   requests: any[];
+  currentLocation: { latitude: number; longitude: number } | null;
   toggleOnline: () => Promise<void>;
   acceptRide: (rideId: string) => Promise<any>;
   startRideWithOtp: (otp: string) => Promise<any>;
@@ -41,8 +43,10 @@ const normalizeRideForDriverUi = (ride: any) => {
 export const DriverRideProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { driver } = useDriverAuth();
   const [isOnline, setIsOnline] = useState<boolean>(driver?.status === 'active');
+  const [isRestoringRide, setIsRestoringRide] = useState<boolean>(true);
   const [activeRide, setActiveRide] = useState<any | null>(null);
   const [requests, setRequests] = useState<any[]>([]);
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
     if (driver) {
@@ -58,6 +62,7 @@ export const DriverRideProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     checkPermission();
+    fetchActiveRides();
   }, [driver]);
 
   // Request Location Permission
@@ -179,12 +184,10 @@ export const DriverRideProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if ('geolocation' in navigator) {
           watchId = navigator.geolocation.watchPosition(
             (pos) => {
-              updateCaptainLocation(
-                driver._id,
-                pos.coords.latitude,
-                pos.coords.longitude,
-                activeRide?._id
-              );
+              const lat = pos.coords.latitude;
+              const lng = pos.coords.longitude;
+              setCurrentLocation({ latitude: lat, longitude: lng });
+              updateCaptainLocation(driver._id, lat, lng, activeRide?._id);
             },
             (err) => console.warn('Browser geolocation watch error:', err),
             { enableHighAccuracy: true, maximumAge: 5000 }
@@ -199,12 +202,10 @@ export const DriverRideProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               distanceInterval: 5,
             },
             (loc) => {
-              updateCaptainLocation(
-                driver._id,
-                loc.coords.latitude,
-                loc.coords.longitude,
-                activeRide?._id
-              );
+              const lat = loc.coords.latitude;
+              const lng = loc.coords.longitude;
+              setCurrentLocation({ latitude: lat, longitude: lng });
+              updateCaptainLocation(driver._id, lat, lng, activeRide?._id);
             }
           );
         } catch (err) {
@@ -214,12 +215,10 @@ export const DriverRideProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               const currentLoc = await Location.getCurrentPositionAsync({
                 accuracy: Location.Accuracy.Balanced,
               });
-              updateCaptainLocation(
-                driver._id,
-                currentLoc.coords.latitude,
-                currentLoc.coords.longitude,
-                activeRide?._id
-              );
+              const lat = currentLoc.coords.latitude;
+              const lng = currentLoc.coords.longitude;
+              setCurrentLocation({ latitude: lat, longitude: lng });
+              updateCaptainLocation(driver._id, lat, lng, activeRide?._id);
             } catch (err) {
               console.warn('Fallback location fetch failed:', err);
             }
@@ -257,7 +256,20 @@ export const DriverRideProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const fetchActiveRides = async () => {
-    setActiveRide((prev: any | null) => prev);
+    try {
+      const { ride } = await captainService.getActiveRide();
+      if (ride) {
+        const normalized = normalizeRideForDriverUi(ride);
+        setActiveRide(normalized);
+        if (normalized._id) {
+          joinRideRoom(normalized._id);
+        }
+      }
+    } catch (e) {
+      console.log('[DriverRideContext] Could not restore active ride:', e);
+    } finally {
+      setIsRestoringRide(false);
+    }
   };
 
   const toggleOnline = async () => {
@@ -272,21 +284,22 @@ export const DriverRideProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       try {
         if (Platform.OS === 'web' && 'geolocation' in navigator) {
           navigator.geolocation.getCurrentPosition((pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            setCurrentLocation({ latitude: lat, longitude: lng });
             if (driver) {
-              updateCaptainLocation(driver._id, pos.coords.latitude, pos.coords.longitude, activeRide?._id);
+              updateCaptainLocation(driver._id, lat, lng, activeRide?._id);
             }
           });
         } else {
           const currentLoc = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Balanced,
           });
+          const lat = currentLoc.coords.latitude;
+          const lng = currentLoc.coords.longitude;
+          setCurrentLocation({ latitude: lat, longitude: lng });
           if (driver) {
-            updateCaptainLocation(
-              driver._id,
-              currentLoc.coords.latitude,
-              currentLoc.coords.longitude,
-              activeRide?._id
-            );
+            updateCaptainLocation(driver._id, lat, lng, activeRide?._id);
           }
         }
       } catch (e) {
@@ -345,8 +358,10 @@ export const DriverRideProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     <DriverRideContext.Provider
       value={{
         isOnline,
+        isRestoringRide,
         activeRide,
         requests,
+        currentLocation,
         toggleOnline,
         acceptRide,
         startRideWithOtp,

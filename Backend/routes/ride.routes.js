@@ -4,7 +4,20 @@ const { body, query } = require('express-validator');
 const rideController = require('../controllers/ride.controller');
 const authMiddleware = require('../middlewares/auth.middleware');
 
-router.get('/chat-details/:id', authMiddleware.authAny, rideController.chatDetails)
+router.get('/active-ride',
+     authMiddleware.authUser, 
+     rideController.getActiveRideUser
+    )
+
+router.get('/captain-active-ride',
+     authMiddleware.authCaptain, 
+     rideController.getActiveRideCaptain
+    )
+
+router.get('/chat-details/:id', 
+    authMiddleware.authAny, 
+    rideController.chatDetails
+)
 
 router.post('/create',
     authMiddleware.authUser,

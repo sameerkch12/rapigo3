@@ -13,13 +13,18 @@ import { useDriverAuth } from '../contexts/DriverAuthContext';
 import { Colors, Shadows } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
+type Step = 'phone' | 'otp';
+
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, driver, isLoading } = useDriverAuth();
+  const { sendPhoneOtp, verifyPhoneOtp, driver } = useDriverAuth();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [step, setStep] = useState<Step>('phone');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [demoOtp, setDemoOtp] = useState<string | null>(null);
 
   useEffect(() => {
     if (driver) {
@@ -27,18 +32,48 @@ export default function LoginScreen() {
     }
   }, [driver]);
 
-  const handleContinue = async () => {
+  const handleSendOtp = async () => {
     setError('');
-    if (!email || !password) {
-      setError('Please enter both email and password.');
+    if (!/^\d{10}$/.test(phone)) {
+      setError('Please enter a valid 10-digit phone number.');
       return;
     }
-
+    setSubmitting(true);
     try {
-      await login(email, password);
-      router.replace('/(tabs)');
+      const res = await sendPhoneOtp(phone);
+      if (res.isDemo && res.otp) {
+        setDemoOtp(res.otp);
+      } else {
+        setDemoOtp(null);
+      }
+      setStep('otp');
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please check credentials.');
+      setError(err.message || 'Failed to send OTP. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    setError('');
+    if (!/^\d{6}$/.test(otp)) {
+      setError('Please enter the 6-digit OTP.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await verifyPhoneOtp(phone, otp);
+      if (res.isNewCaptain) {
+        // First-time captain — collect profile + vehicle details
+        router.replace({ pathname: '/register-details', params: { phone } });
+      } else {
+        // Returning captain — logged in, go home
+        router.replace('/(tabs)');
+      }
+    } catch (err: any) {
+      setError(err.message || 'OTP verification failed. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -56,49 +91,92 @@ export default function LoginScreen() {
       {/* Bottom Sheet Card */}
       <View style={[styles.bottomCard, Shadows.card]}>
         <ScrollView contentContainerStyle={styles.formScroll} keyboardShouldPersistTaps="handled">
-          <Text style={styles.cardHeader}>Captain Login</Text>
+          {step === 'phone' ? (
+            <>
+              <Text style={styles.cardHeader}>Login / Sign up</Text>
+              <Text style={styles.helperText}>
+                Enter your phone number to receive a verification code.
+              </Text>
 
-          {error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
+              {error ? (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
 
-          <Text style={styles.inputLabel}>Email Address</Text>
-          <View style={styles.inputBox}>
-            <Ionicons name="mail-outline" size={20} color={Colors.textMuted} />
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="captain@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
+              <Text style={styles.inputLabel}>Phone Number</Text>
+              <View style={styles.inputBox}>
+                <Ionicons name="call-outline" size={20} color={Colors.textMuted} />
+                <TextInput
+                  style={styles.input}
+                  value={phone}
+                  onChangeText={(t) => setPhone(t.replace(/[^0-9]/g, ''))}
+                  placeholder="10-digit mobile number"
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                />
+              </View>
 
-          <Text style={styles.inputLabel}>Password</Text>
-          <View style={styles.inputBox}>
-            <Ionicons name="lock-closed-outline" size={20} color={Colors.textMuted} />
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter password"
-              secureTextEntry
-            />
-          </View>
+              <TouchableOpacity style={styles.continueBtn} onPress={handleSendOtp} disabled={submitting}>
+                {submitting ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.continueBtnText}>Send OTP</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.cardHeader}>Verify OTP</Text>
+              <Text style={styles.helperText}>
+                Enter the 6-digit code sent to +91 {phone}.
+              </Text>
 
-          <TouchableOpacity style={styles.continueBtn} onPress={handleContinue} disabled={isLoading}>
-            {isLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.continueBtnText}>Login</Text>}
-          </TouchableOpacity>
+              {demoOtp ? (
+                <View style={styles.demoBox}>
+                  <Text style={styles.demoText}>Demo OTP: {demoOtp}</Text>
+                </View>
+              ) : null}
 
-          <TouchableOpacity
-            style={styles.registerBtn}
-            onPress={() => router.push('/register-details')}
-          >
-            <Text style={styles.registerBtnText}>New Captain? Register Here</Text>
-          </TouchableOpacity>
+              {error ? (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
+
+              <Text style={styles.inputLabel}>OTP</Text>
+              <View style={styles.inputBox}>
+                <Ionicons name="keypad-outline" size={20} color={Colors.textMuted} />
+                <TextInput
+                  style={styles.input}
+                  value={otp}
+                  onChangeText={(t) => setOtp(t.replace(/[^0-9]/g, ''))}
+                  placeholder="6-digit code"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+              </View>
+
+              <TouchableOpacity style={styles.continueBtn} onPress={handleVerifyOtp} disabled={submitting}>
+                {submitting ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.continueBtnText}>Verify & Continue</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.registerBtn}
+                onPress={() => {
+                  setStep('phone');
+                  setOtp('');
+                  setError('');
+                }}
+              >
+                <Text style={styles.registerBtnText}>Change phone number</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </ScrollView>
       </View>
     </View>
@@ -128,9 +206,12 @@ const styles = StyleSheet.create({
     paddingTop: 24,
   },
   formScroll: { paddingBottom: 24 },
-  cardHeader: { fontSize: 20, fontWeight: '800', color: Colors.textDark, marginBottom: 16 },
+  cardHeader: { fontSize: 20, fontWeight: '800', color: Colors.textDark, marginBottom: 6 },
+  helperText: { fontSize: 13, color: Colors.textMuted, marginBottom: 16 },
   errorBox: { backgroundColor: '#FEE2E2', padding: 10, borderRadius: 8, marginBottom: 12 },
   errorText: { color: '#DC2626', fontSize: 13 },
+  demoBox: { backgroundColor: Colors.primaryLight, padding: 10, borderRadius: 8, marginBottom: 12 },
+  demoText: { color: Colors.primary, fontSize: 13, fontWeight: '700' },
   inputLabel: { fontSize: 13, fontWeight: '700', color: Colors.textDark, marginBottom: 6 },
   inputBox: {
     flexDirection: 'row',

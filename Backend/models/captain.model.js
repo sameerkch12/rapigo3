@@ -16,13 +16,15 @@ const captainSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      required: true,
+      // Not required at schema level: phone-OTP captains provide their email
+      // during first-time profile completion, not at document creation.
       unique: true,
+      sparse: true,
       match: /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
     },
     password: {
       type: String,
-      required: true,
+      // Optional: phone-OTP captains authenticate via OTP and have no password.
       minlength: 8,
       select: false,
     },

@@ -46,7 +46,7 @@ const getFare = async (pickup, destination) => {
     ),
   };
 
-  return { fare, distanceTime };
+  return { fare, distanceTime, polyline: distanceTime.polyline };
 };
 
 module.exports.getFare = getFare;
@@ -68,10 +68,27 @@ module.exports.createRide = async ({
   try {
     const { fare, distanceTime } = await getFare(pickup, destination);
 
+    // Geocode both ends so we can restore map markers on cold start.
+    // Failure here must not block ride creation.
+    let pickupCoords;
+    let destinationCoords;
+    try {
+      const [p, d] = await Promise.all([
+        mapService.getAddressCoordinate(pickup),
+        mapService.getAddressCoordinate(destination),
+      ]);
+      pickupCoords = { lat: p.ltd, lng: p.lng };
+      destinationCoords = { lat: d.ltd, lng: d.lng };
+    } catch (geoErr) {
+      console.warn("Ride geocoding failed:", geoErr.message);
+    }
+
     const ride = await rideModel.create({
       user,
       pickup,
       destination,
+      pickupCoords,
+      destinationCoords,
       otp: getOtp(6),
       fare: fare[vehicleType],
       vehicle: vehicleType,

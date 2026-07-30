@@ -35,6 +35,22 @@ module.exports.getDistanceTime = async (req, res) => {
   }
 };
 
+module.exports.getReverseGeocode = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { lat, lng } = req.query;
+    const result = await mapService.getReverseGeocode(lat, lng);
+    res.status(200).json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Reverse geocode failed" });
+  }
+};
+
 module.exports.getAutoCompleteSuggestions = async (req, res) => {
   try {
     const errors = validationResult(req);

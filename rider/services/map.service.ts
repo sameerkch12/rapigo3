@@ -9,6 +9,12 @@ export interface DistanceTimeResponse {
   distance: { text: string; value: number };
   duration: { text: string; value: number };
   status: string;
+  polyline?: string;
+}
+
+export interface RouteCoordinate {
+  latitude: number;
+  longitude: number;
 }
 
 export interface FareResponse {
@@ -18,6 +24,7 @@ export interface FareResponse {
     bike: number;
   };
   distanceTime: DistanceTimeResponse;
+  polyline?: string;
 }
 
 export const mapService = {
@@ -30,8 +37,32 @@ export const mapService = {
     }
   },
 
+
   async getCoordinates(address: string): Promise<LocationCoords> {
-    return await api<LocationCoords>(`/map/get-coordinates?address=${encodeURIComponent(address)}`);
+  try {
+    console.log("Request Address:", address);
+
+    const response = await api<LocationCoords>(
+      `/map/get-coordinates?address=${encodeURIComponent(address)}`
+    );
+
+    console.log("Coordinates Response:", response);
+
+    return response;
+  } catch (error) {
+    console.error("getCoordinates Error:", error);
+    throw error;
+  }
+},
+
+  async getReverseGeocode(lat: number, lng: number): Promise<{ address: string; placeId?: string }> {
+    try {
+      return await api<{ address: string; placeId?: string }>(
+        `/map/reverse-geocode?lat=${lat}&lng=${lng}`
+      );
+    } catch {
+      return { address: `${lat.toFixed(6)}, ${lng.toFixed(6)}` };
+    }
   },
 
   async getDistanceTime(origin: string, destination: string): Promise<DistanceTimeResponse> {

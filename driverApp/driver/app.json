@@ -51,9 +51,5 @@
       "typedRoutes": true,
       "reactCompiler": true
     }
-    ,
-    "extra": {
-      "apiBaseUrl": "http://10.146.205.171:4000"
-    }
   }
 }

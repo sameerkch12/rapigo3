@@ -49,6 +49,8 @@ const rideSchema = new mongoose.Schema(
     signature: {
       type: String,
     },
+    pickupCoords: { lat: Number, lng: Number },
+    destinationCoords: { lat: Number, lng: Number },
     otp: {
       type: String,
       select: false,

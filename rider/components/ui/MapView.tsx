@@ -9,7 +9,6 @@ export interface MapViewProps {
     latitudeDelta: number;
     longitudeDelta: number;
   };
-  /** @deprecated use region instead */
   initialRegion?: {
     latitude: number;
     longitude: number;
@@ -40,25 +39,19 @@ export interface CalloutProps {
 
 export const Callout = ({ children }: CalloutProps) => <>{children}</>;
 
-// Markers collected by context to pass to iframe URL
 const markerRegistry: { coordinate: { latitude: number; longitude: number }; pinColor?: string; title?: string }[] = [];
 
 export const Marker = ({ coordinate, title, pinColor = '#3B82F6' }: MarkerProps) => {
-  // Register marker on mount — parent MapView picks them up via children scan
-  return null; // Rendered via iframe URL params
+  return null;
 };
 
 export const Polyline = ({ }: PolylineProps) => null;
 
-// ─────────────────────────────────────────────
-// Web Google Maps Embed via iframe
-// ─────────────────────────────────────────────
 function WebMapView({ region, initialRegion, children, onMapReady }: MapViewProps) {
   const activeRegion = region || initialRegion;
   const [loaded, setLoaded] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Extract marker coordinates from children props
   const markers: { lat: number; lng: number; color?: string; title?: string }[] = [];
   React.Children.forEach(children, (child: any) => {
     if (child?.props?.coordinate) {
@@ -79,7 +72,6 @@ function WebMapView({ region, initialRegion, children, onMapReady }: MapViewProp
 
   const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY || '';
 
-  // Build embed URL — if 2 markers, use directions mode
   let embedUrl = '';
   if (apiKey) {
     if (markers.length >= 2) {
@@ -96,7 +88,6 @@ function WebMapView({ region, initialRegion, children, onMapReady }: MapViewProp
   }, [loaded]);
 
   if (!apiKey) {
-    // No API key — show OpenStreetMap fallback via iframe (no key needed)
     const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.02},${lat - 0.02},${lng + 0.02},${lat + 0.02}&layer=mapnik${markers.map(m => `&marker=${m.lat},${m.lng}`).join('')}`;
     return (
       <View style={[styles.container]}>
@@ -115,7 +106,6 @@ function WebMapView({ region, initialRegion, children, onMapReady }: MapViewProp
           title="Map"
           loading="lazy"
         />
-        {/* Overlay markers as HTML pins */}
         {loaded && markers.map((m, i) => (
           <View key={i} style={[styles.markerOverlay, { backgroundColor: m.color || '#3B82F6' }]}>
             <Text style={styles.markerPin}>📍</Text>
@@ -148,36 +138,83 @@ function WebMapView({ region, initialRegion, children, onMapReady }: MapViewProp
   );
 }
 
-// ─────────────────────────────────────────────
-// Native fallback (non-web without react-native-maps)
-// ─────────────────────────────────────────────
-function NativeMapPlaceholder({ region, initialRegion, children, onMapReady }: MapViewProps) {
+function NativeMapView({ region, initialRegion, children, onMapReady }: MapViewProps) {
   const activeRegion = region || initialRegion;
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (onMapReady) onMapReady();
-  }, []);
+    if (ready && onMapReady) onMapReady();
+  }, [ready]);
 
-  return (
-    <View style={styles.nativePlaceholder}>
-      <View style={styles.gridOverlay}>
-        <Text style={styles.mapText}>🗺️ Map</Text>
-        {activeRegion && (
-          <Text style={styles.regionText}>
-            {activeRegion.latitude.toFixed(4)}, {activeRegion.longitude.toFixed(4)}
-          </Text>
-        )}
+  try {
+    const RNMapView = require('react-native-maps').default;
+    const RNMarker = require('react-native-maps').Marker;
+    const RNPolyline = require('react-native-maps').Polyline;
+
+    const markers: React.ReactNode[] = [];
+    const polylines: React.ReactNode[] = [];
+
+    React.Children.forEach(children, (child: any) => {
+      if (!child) return;
+      if (child.type?.name === 'Marker' || child.type?.displayName === 'Marker') {
+        markers.push(
+          <RNMarker
+            key={`m-${child.props.coordinate?.latitude}-${child.props.coordinate?.longitude}`}
+            coordinate={child.props.coordinate}
+            title={child.props.title}
+            pinColor={child.props.pinColor}
+          >
+            {child.props.children}
+          </RNMarker>
+        );
+      } else if (child.type?.name === 'Polyline' || child.type?.displayName === 'Polyline') {
+        polylines.push(
+          <RNPolyline
+            key={`pl-${child.props.coordinates?.length}`}
+            coordinates={child.props.coordinates}
+            strokeColor={child.props.strokeColor || '#2563EB'}
+            strokeWidth={child.props.strokeWidth || 4}
+          />
+        );
+      }
+    });
+
+    return (
+      <RNMapView
+        style={{ flex: 1, width: '100%', height: '100%' }}
+        initialRegion={activeRegion}
+        region={region}
+        onMapReady={() => setReady(true)}
+        showsUserLocation
+        showsMyLocationButton
+        showsCompass
+      >
+        {polylines}
+        {markers}
+      </RNMapView>
+    );
+  } catch {
+    return (
+      <View style={styles.nativePlaceholder}>
+        <View style={styles.gridOverlay}>
+          <Text style={styles.mapText}>🗺️ Map</Text>
+          {activeRegion && (
+            <Text style={styles.regionText}>
+              {activeRegion.latitude.toFixed(4)}, {activeRegion.longitude.toFixed(4)}
+            </Text>
+          )}
+        </View>
+        <View style={styles.markersContainer}>{children}</View>
       </View>
-      <View style={styles.markersContainer}>{children}</View>
-    </View>
-  );
+    );
+  }
 }
 
 export default function MapView(props: MapViewProps) {
   if (Platform.OS === 'web') {
     return <WebMapView {...props} />;
   }
-  return <NativeMapPlaceholder {...props} />;
+  return <NativeMapView {...props} />;
 }
 
 const styles = StyleSheet.create({

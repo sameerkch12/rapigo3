@@ -30,20 +30,28 @@ module.exports.getDistanceTime = async (origin, destination) => {
   }
   const apiKey = process.env.GOOGLE_MAPS_API;
 
-  const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(
+  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(
     origin
-  )}&destinations=${encodeURIComponent(destination)}&key=${apiKey}`;
+  )}&destination=${encodeURIComponent(destination)}&key=${apiKey}`;
 
   try {
     const response = await axios.get(url);
     if (response.data.status === "OK") {
-      if (response.data.rows[0].elements[0].status === "ZERO_RESULTS") {
+      const route = response.data.routes[0];
+      if (!route) {
         throw new Error("No routes found");
       }
 
-      return response.data.rows[0].elements[0];
+      const leg = route.legs[0];
+      return {
+        distance: leg.distance,
+        duration: leg.duration,
+        status: "OK",
+        polyline: route.overview_polyline.points,
+      };
     } else {
-      throw new Error("Unable to fetch distance and time");
+      console.error("Google Directions API error:", response.data.status, response.data.error_message);
+      throw new Error(`Unable to fetch distance and time: ${response.data.status} - ${response.data.error_message || 'no detail'}`);
     }
   } catch (err) {
     console.error(err);
@@ -84,6 +92,27 @@ module.exports.getAutoCompleteSuggestions = async (input) => {
       `${input} Railway Station`,
       `${input} City Center & Market`,
     ];
+  }
+};
+
+module.exports.getReverseGeocode = async (lat, lng) => {
+  const apiKey = process.env.GOOGLE_MAPS_API;
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
+
+  try {
+    const response = await axios.get(url);
+    if (response.data.status === "OK") {
+      const result = response.data.results[0];
+      return {
+        address: result.formatted_address,
+        placeId: result.place_id,
+      };
+    } else {
+      throw new Error("Unable to reverse geocode");
+    }
+  } catch (error) {
+    console.error(error);
+    throw error;
   }
 };
 

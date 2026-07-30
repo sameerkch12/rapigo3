@@ -161,6 +161,42 @@ export const captainService = {
     return res;
   },
 
+  async sendPhoneOtp(phone: string): Promise<{ message: string; isDemo?: boolean; otp?: string }> {
+    return await api('/captain/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phone }),
+    });
+  },
+
+  async verifyPhoneOtp(
+    phone: string,
+    otp: string
+  ): Promise<{ message: string; isNewCaptain: boolean; token?: string; captain?: CaptainProfile; phone?: string }> {
+    const res = await api<{ message: string; isNewCaptain: boolean; token?: string; captain?: CaptainProfile; phone?: string }>(
+      '/captain/verify-otp',
+      {
+        method: 'POST',
+        body: JSON.stringify({ phone, otp }),
+      }
+    );
+    if (res.token) setCaptainToken(res.token);
+    return res;
+  },
+
+  async registerPhoneCaptain(data: {
+    phone: string;
+    fullname: { firstname: string; lastname?: string };
+    email: string;
+    vehicle: { color: string; number: string; capacity: number; type: 'car' | 'bike' | 'auto' };
+  }): Promise<AuthResponse> {
+    const res = await api<AuthResponse>('/captain/register-phone', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (res.token) setCaptainToken(res.token);
+    return res;
+  },
+
   async getProfile(): Promise<{ captain: CaptainProfile }> {
     return await api<{ captain: CaptainProfile }>('/captain/profile');
   },
@@ -203,5 +239,9 @@ export const captainService = {
 
   async getChatDetails(rideId: string): Promise<{ user: any; captain: any; messages: any[] }> {
     return await api(`/ride/chat-details/${rideId}`);
+  },
+
+  async getActiveRide(): Promise<{ ride: any | null }> {
+    return await api<{ ride: any | null }>('/ride/captain-active-ride');
   },
 };

@@ -21,27 +21,17 @@ import { Colors, FontSize, FontWeight, Radius, Shadow } from '@/constants/theme'
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { login, register, sendPhoneOtp, verifyPhoneOtp, registerPhoneUser, isLoading } = useAuth();
+  const { sendPhoneOtp, verifyPhoneOtp, registerPhoneUser, isLoading } = useAuth();
 
-  // Auth Mode: 'otp' (Primary) vs 'email' (Legacy)
-  const [authMode, setAuthMode] = useState<'otp' | 'email'>('otp');
-
-  // OTP Flow Steps: 'phone' -> 'otp' -> 'profile' (if new user)
   const [otpStep, setOtpStep] = useState<'phone' | 'otp' | 'profile'>('phone');
 
-  // Form State
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [demoOtpHint, setDemoOtpHint] = useState<string | null>(null);
 
-  // Profile Form (For first time OTP user)
   const [firstname, setFirstname] = useState('');
   const [lastname, setLastname] = useState('');
   const [email, setEmail] = useState('');
-
-  // Legacy Email/Password Form
-  const [legacyMode, setLegacyMode] = useState<'login' | 'register'>('login');
-  const [password, setPassword] = useState('');
 
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
@@ -128,35 +118,6 @@ export default function LoginScreen() {
     }
   };
 
-  // Handle Legacy Email/Password Submission
-  const handleLegacySubmit = async () => {
-    setError('');
-    if (!email || !password) {
-      setError('Please fill in all required fields');
-      return;
-    }
-
-    try {
-      if (legacyMode === 'login') {
-        await login(email, password);
-      } else {
-        if (!firstname || firstname.length < 2) {
-          setError('First name must be at least 2 characters long');
-          return;
-        }
-        await register({
-          fullname: { firstname, lastname },
-          email,
-          password,
-          phone: phone || '9876543210',
-        });
-      }
-      router.replace('/(tabs)');
-    } catch (e: any) {
-      setError(e.message || 'Authentication failed');
-    }
-  };
-
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: Colors.background }}
@@ -178,47 +139,6 @@ export default function LoginScreen() {
 
         <View style={styles.cardContainer}>
           <View style={styles.card}>
-            {/* Top Auth Mode Switcher */}
-            <View style={styles.authToggleRow}>
-              <TouchableOpacity
-                style={[styles.authToggleTab, authMode === 'otp' && styles.activeAuthToggleTab]}
-                onPress={() => {
-                  setAuthMode('otp');
-                  setOtpStep('phone');
-                  setError('');
-                  setInfoMessage('');
-                }}
-              >
-                <MaterialIcons
-                  name="smartphone"
-                  size={18}
-                  color={authMode === 'otp' ? Colors.primary : Colors.text.secondary}
-                />
-                <Text style={[styles.authToggleText, authMode === 'otp' && styles.activeAuthToggleText]}>
-                  Mobile OTP
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.authToggleTab, authMode === 'email' && styles.activeAuthToggleTab]}
-                onPress={() => {
-                  setAuthMode('email');
-                  setError('');
-                  setInfoMessage('');
-                }}
-              >
-                <MaterialIcons
-                  name="email"
-                  size={18}
-                  color={authMode === 'email' ? Colors.primary : Colors.text.secondary}
-                />
-                <Text style={[styles.authToggleText, authMode === 'email' && styles.activeAuthToggleText]}>
-                  Email / Password
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Error & Info Alerts */}
             {error ? (
               <View style={styles.errorBox}>
                 <MaterialIcons name="error-outline" size={18} color="#DC2626" />
@@ -233,200 +153,123 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
-            {/* MODE 1: MOBILE OTP AUTH (PRIMARY) */}
-            {authMode === 'otp' && (
+            {/* Step 1: Phone Input */}
+            {otpStep === 'phone' && (
               <>
-                {/* Step 1: Phone Input */}
-                {otpStep === 'phone' && (
-                  <>
-                    <Text style={styles.sectionTitle}>Login or Register</Text>
-                    <Text style={styles.sectionSubtitle}>Enter your mobile number to receive a 6-digit OTP code</Text>
+                <Text style={styles.sectionTitle}>Login or Register</Text>
+                <Text style={styles.sectionSubtitle}>Enter your mobile number to receive a 6-digit OTP code</Text>
 
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.label}>Mobile Phone Number</Text>
-                      <View style={styles.inputBox}>
-                        <Text style={styles.countryCode}>+91</Text>
-                        <View style={styles.verticalDivider} />
-                        <TextInput
-                          style={styles.input}
-                          placeholder="Enter 10 digit number"
-                          keyboardType="phone-pad"
-                          maxLength={10}
-                          value={phone}
-                          onChangeText={setPhone}
-                        />
-                      </View>
-                    </View>
-
-                    <Button
-                      title="Get OTP Code"
-                      onPress={handleSendOtp}
-                      loading={isLoading}
-                      style={{ marginTop: 12 }}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Mobile Phone Number</Text>
+                  <View style={styles.inputBox}>
+                    <Text style={styles.countryCode}>+91</Text>
+                    <View style={styles.verticalDivider} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter 10 digit number"
+                      keyboardType="phone-pad"
+                      maxLength={10}
+                      value={phone}
+                      onChangeText={setPhone}
                     />
-                  </>
-                )}
+                  </View>
+                </View>
 
-                {/* Step 2: OTP Verification */}
-                {otpStep === 'otp' && (
-                  <>
-                    <View style={styles.stepHeader}>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setOtpStep('phone');
-                          setError('');
-                          setInfoMessage('');
-                        }}
-                      >
-                        <MaterialIcons name="arrow-back" size={22} color={Colors.text.primary} />
-                      </TouchableOpacity>
-                      <Text style={styles.stepTitle}>Enter Verification Code</Text>
-                    </View>
-
-                    <Text style={styles.sectionSubtitle}>
-                      Code sent to <Text style={{ fontWeight: '700', color: Colors.text.primary }}>+91 {phone}</Text>
-                    </Text>
-
-                    {demoOtpHint && (
-                      <View style={styles.demoBadge}>
-                        <MaterialIcons name="bug-report" size={16} color="#D97706" />
-                        <Text style={styles.demoBadgeText}>Demo OTP: {demoOtpHint}</Text>
-                      </View>
-                    )}
-
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.label}>6-Digit OTP</Text>
-                      <View style={styles.inputBox}>
-                        <MaterialIcons name="security" size={20} color={Colors.text.secondary} />
-                        <TextInput
-                          style={[styles.input, { letterSpacing: 4, fontSize: 18, fontWeight: '700' }]}
-                          placeholder="123456"
-                          keyboardType="number-pad"
-                          maxLength={6}
-                          value={otp}
-                          onChangeText={setOtp}
-                        />
-                      </View>
-                    </View>
-
-                    <Button
-                      title="Verify OTP & Continue"
-                      onPress={handleVerifyOtp}
-                      loading={isLoading}
-                      style={{ marginTop: 12 }}
-                    />
-
-                    <TouchableOpacity style={styles.resendBtn} onPress={handleSendOtp} disabled={isLoading}>
-                      <Text style={styles.resendText}>Didn't receive code? Resend OTP</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-
-                {/* Step 3: Complete Profile (First-Time User) */}
-                {otpStep === 'profile' && (
-                  <>
-                    <Text style={styles.sectionTitle}>Welcome to RapiGo 🎉</Text>
-                    <Text style={styles.sectionSubtitle}>Please provide your name and email to complete your setup</Text>
-
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.label}>First Name</Text>
-                      <View style={styles.inputBox}>
-                        <MaterialIcons name="person" size={20} color={Colors.text.secondary} />
-                        <TextInput
-                          style={styles.input}
-                          placeholder="e.g. Rahul"
-                          value={firstname}
-                          onChangeText={setFirstname}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.label}>Last Name</Text>
-                      <View style={styles.inputBox}>
-                        <MaterialIcons name="person-outline" size={20} color={Colors.text.secondary} />
-                        <TextInput
-                          style={styles.input}
-                          placeholder="e.g. Sharma"
-                          value={lastname}
-                          onChangeText={setLastname}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.label}>Email Address</Text>
-                      <View style={styles.inputBox}>
-                        <MaterialIcons name="email" size={20} color={Colors.text.secondary} />
-                        <TextInput
-                          style={styles.input}
-                          placeholder="name@example.com"
-                          keyboardType="email-address"
-                          autoCapitalize="none"
-                          value={email}
-                          onChangeText={setEmail}
-                        />
-                      </View>
-                    </View>
-
-                    <Button
-                      title="Complete & Enter App"
-                      onPress={handleCompleteProfile}
-                      loading={isLoading}
-                      style={{ marginTop: 12 }}
-                    />
-                  </>
-                )}
+                <Button
+                  title="Get OTP Code"
+                  onPress={handleSendOtp}
+                  loading={isLoading}
+                  style={{ marginTop: 12 }}
+                />
               </>
             )}
 
-            {/* MODE 2: LEGACY EMAIL / PASSWORD AUTH */}
-            {authMode === 'email' && (
+            {/* Step 2: OTP Verification */}
+            {otpStep === 'otp' && (
               <>
-                <View style={styles.tabBar}>
+                <View style={styles.stepHeader}>
                   <TouchableOpacity
-                    style={[styles.tab, legacyMode === 'login' && styles.activeTab]}
-                    onPress={() => { setLegacyMode('login'); setError(''); }}
+                    onPress={() => {
+                      setOtpStep('phone');
+                      setError('');
+                      setInfoMessage('');
+                    }}
                   >
-                    <Text style={[styles.tabText, legacyMode === 'login' && styles.activeTabText]}>Login</Text>
+                    <MaterialIcons name="arrow-back" size={22} color={Colors.text.primary} />
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.tab, legacyMode === 'register' && styles.activeTab]}
-                    onPress={() => { setLegacyMode('register'); setError(''); }}
-                  >
-                    <Text style={[styles.tabText, legacyMode === 'register' && styles.activeTabText]}>Register</Text>
-                  </TouchableOpacity>
+                  <Text style={styles.stepTitle}>Enter Verification Code</Text>
                 </View>
 
-                {legacyMode === 'register' && (
-                  <>
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.label}>First Name</Text>
-                      <View style={styles.inputBox}>
-                        <MaterialIcons name="person" size={20} color={Colors.text.secondary} />
-                        <TextInput
-                          style={styles.input}
-                          placeholder="First Name (e.g. John)"
-                          value={firstname}
-                          onChangeText={setFirstname}
-                        />
-                      </View>
-                    </View>
+                <Text style={styles.sectionSubtitle}>
+                  Code sent to <Text style={{ fontWeight: '700', color: Colors.text.primary }}>+91 {phone}</Text>
+                </Text>
 
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.label}>Last Name</Text>
-                      <View style={styles.inputBox}>
-                        <MaterialIcons name="person-outline" size={20} color={Colors.text.secondary} />
-                        <TextInput
-                          style={styles.input}
-                          placeholder="Last Name (e.g. Doe)"
-                          value={lastname}
-                          onChangeText={setLastname}
-                        />
-                      </View>
-                    </View>
-                  </>
+                {demoOtpHint && (
+                  <View style={styles.demoBadge}>
+                    <MaterialIcons name="bug-report" size={16} color="#D97706" />
+                    <Text style={styles.demoBadgeText}>Demo OTP: {demoOtpHint}</Text>
+                  </View>
                 )}
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>6-Digit OTP</Text>
+                  <View style={styles.inputBox}>
+                    <MaterialIcons name="security" size={20} color={Colors.text.secondary} />
+                    <TextInput
+                      style={[styles.input, { letterSpacing: 4, fontSize: 18, fontWeight: '700' }]}
+                      placeholder="123456"
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      value={otp}
+                      onChangeText={setOtp}
+                    />
+                  </View>
+                </View>
+
+                <Button
+                  title="Verify OTP & Continue"
+                  onPress={handleVerifyOtp}
+                  loading={isLoading}
+                  style={{ marginTop: 12 }}
+                />
+
+                <TouchableOpacity style={styles.resendBtn} onPress={handleSendOtp} disabled={isLoading}>
+                  <Text style={styles.resendText}>Didn't receive code? Resend OTP</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Step 3: Complete Profile (First-Time User) */}
+            {otpStep === 'profile' && (
+              <>
+                <Text style={styles.sectionTitle}>Welcome to RapiGo</Text>
+                <Text style={styles.sectionSubtitle}>Please provide your name and email to complete your setup</Text>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>First Name</Text>
+                  <View style={styles.inputBox}>
+                    <MaterialIcons name="person" size={20} color={Colors.text.secondary} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. Rahul"
+                      value={firstname}
+                      onChangeText={setFirstname}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Last Name</Text>
+                  <View style={styles.inputBox}>
+                    <MaterialIcons name="person-outline" size={20} color={Colors.text.secondary} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. Sharma"
+                      value={lastname}
+                      onChangeText={setLastname}
+                    />
+                  </View>
+                </View>
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Email Address</Text>
@@ -443,40 +286,9 @@ export default function LoginScreen() {
                   </View>
                 </View>
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Password</Text>
-                  <View style={styles.inputBox}>
-                    <MaterialIcons name="lock" size={20} color={Colors.text.secondary} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Min. 8 characters"
-                      secureTextEntry
-                      value={password}
-                      onChangeText={setPassword}
-                    />
-                  </View>
-                </View>
-
-                {legacyMode === 'register' && (
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Phone Number (10 digits)</Text>
-                    <View style={styles.inputBox}>
-                      <MaterialIcons name="phone" size={20} color={Colors.text.secondary} />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="9876543210"
-                        keyboardType="phone-pad"
-                        maxLength={10}
-                        value={phone}
-                        onChangeText={setPhone}
-                      />
-                    </View>
-                  </View>
-                )}
-
                 <Button
-                  title={legacyMode === 'login' ? 'Sign In' : 'Create Account'}
-                  onPress={handleLegacySubmit}
+                  title="Complete & Enter App"
+                  onPress={handleCompleteProfile}
                   loading={isLoading}
                   style={{ marginTop: 12 }}
                 />
@@ -532,35 +344,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     padding: 20,
     ...Shadow.lg,
-  },
-  authToggleRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: Radius.lg,
-    padding: 4,
-    marginBottom: 20,
-  },
-  authToggleTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: Radius.md,
-    gap: 6,
-  },
-  activeAuthToggleTab: {
-    backgroundColor: '#FFF',
-    ...Shadow.sm,
-  },
-  authToggleText: {
-    fontSize: 13,
-    fontWeight: FontWeight.medium,
-    color: Colors.text.secondary,
-  },
-  activeAuthToggleText: {
-    color: Colors.primary,
-    fontWeight: FontWeight.bold,
   },
   sectionTitle: {
     fontSize: 18,
@@ -618,32 +401,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: FontWeight.semibold,
     color: Colors.primary,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: Radius.md,
-    padding: 4,
-    marginBottom: 20,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
-  activeTab: {
-    backgroundColor: '#FFF',
-    ...Shadow.sm,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: FontWeight.medium,
-    color: Colors.text.secondary,
-  },
-  activeTabText: {
-    color: Colors.primary,
-    fontWeight: FontWeight.bold,
   },
   errorBox: {
     flexDirection: 'row',

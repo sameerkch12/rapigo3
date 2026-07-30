@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useDriverAuth } from '../contexts/DriverAuthContext';
 import { HeaderBar } from '../components/HeaderBar';
 import { Colors } from '../constants/theme';
@@ -17,25 +17,33 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function RegisterDetailsScreen() {
   const router = useRouter();
-  const { register, isLoading } = useDriverAuth();
+  const { registerPhoneCaptain, isLoading } = useDriverAuth();
+  const params = useLocalSearchParams<{ phone?: string }>();
+  const phone = typeof params.phone === 'string' ? params.phone : '';
 
   const [firstname, setFirstname] = useState('');
   const [lastname, setLastname] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [phone, setPhone] = useState('9876543210');
   const [vehicleType, setVehicleType] = useState<'car' | 'bike' | 'auto'>('bike');
   const [vehicleColor, setVehicleColor] = useState('Black');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [capacity, setCapacity] = useState('2');
+
+  // This screen is only reachable after phone-OTP verification.
+  // If somehow opened without a verified phone, send back to login.
+  useEffect(() => {
+    if (!phone) {
+      router.replace('/login');
+    }
+  }, [phone]);
 
   const handleSave = async () => {
     if (!firstname || firstname.length < 3) {
       Alert.alert('Validation Error', 'First name must be at least 3 characters.');
       return;
     }
-    if (!email || !password || password.length < 8) {
-      Alert.alert('Validation Error', 'Password must be at least 8 characters long.');
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+      Alert.alert('Validation Error', 'Please enter a valid email address.');
       return;
     }
     if (!vehicleNumber || vehicleNumber.length < 3) {
@@ -44,11 +52,10 @@ export default function RegisterDetailsScreen() {
     }
 
     try {
-      await register({
+      await registerPhoneCaptain({
+        phone,
         fullname: { firstname, lastname },
         email,
-        password,
-        phone,
         vehicle: {
           color: vehicleColor || 'Black',
           number: vehicleNumber.toUpperCase(),
@@ -64,10 +71,18 @@ export default function RegisterDetailsScreen() {
 
   return (
     <View style={styles.container}>
-      <HeaderBar title="Captain Registration" showBack />
+      <HeaderBar title="Complete Your Profile" showBack />
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <Text style={styles.subtitleHeader}>Personal Information</Text>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Phone Number</Text>
+          <View style={[styles.input, styles.readonlyBox]}>
+            <Text style={styles.readonlyText}>+91 {phone}</Text>
+            <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
+          </View>
+        </View>
 
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>First Name *</Text>
@@ -98,29 +113,6 @@ export default function RegisterDetailsScreen() {
             placeholder="captain@example.com"
             keyboardType="email-address"
             autoCapitalize="none"
-          />
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Password (min 8 chars) *</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Secret password"
-            secureTextEntry
-          />
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Phone Number</Text>
-          <TextInput
-            style={styles.input}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="9876543210"
-            keyboardType="phone-pad"
-            maxLength={10}
           />
         </View>
 
@@ -183,7 +175,7 @@ export default function RegisterDetailsScreen() {
           {isLoading ? (
             <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={styles.saveBtnText}>Register Captain</Text>
+            <Text style={styles.saveBtnText}>Complete Registration</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -208,6 +200,13 @@ const styles = StyleSheet.create({
     borderColor: Colors.surfaceBorder,
     fontWeight: '600',
   },
+  readonlyBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.background,
+  },
+  readonlyText: { fontSize: 14, color: Colors.textDark, fontWeight: '700' },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14, marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.textDark },
   typeSelectorRow: { flexDirection: 'row', gap: 8 },

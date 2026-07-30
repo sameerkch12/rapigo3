@@ -7,6 +7,8 @@ export interface Ride {
   captain?: any;
   pickup: string;
   destination: string;
+  pickupCoords?: { lat: number; lng: number };
+  destinationCoords?: { lat: number; lng: number };
   fare: number;
   vehicle: string;
   status: 'pending' | 'accepted' | 'ongoing' | 'completed' | 'cancelled';
@@ -42,6 +44,10 @@ export const rideService = {
 
   async cancelRide(rideId: string): Promise<Ride> {
     return await api<Ride>(`/ride/cancel?rideId=${rideId}`);
+  },
+
+  async getActiveRide(): Promise<{ ride: Ride | null }> {
+    return await api<{ ride: Ride | null }>('/ride/active-ride');
   },
 
   async getChatDetails(rideId: string): Promise<{

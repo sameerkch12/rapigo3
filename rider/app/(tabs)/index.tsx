@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Platform } from 'react-native';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Animated, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 
@@ -31,7 +31,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
-  const { ride, setPickup, setDestination } = useRide();
+  const { ride, setPickup, setDestination, clearDestination } = useRide();
   const { pickupText, isLocating } = useCurrentPickupLocation();
 
   const [pickupInput, setPickupInput] = useState('');
@@ -43,6 +43,7 @@ export default function HomeScreen() {
 
   const isEditingPickup = useRef(false);
   const isEditingDestination = useRef(false);
+  const destinationRef = useRef<TextInput>(null!);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(18)).current;
@@ -54,6 +55,16 @@ export default function HomeScreen() {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
+  // Clear destination & auto-focus destination field every time home screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      clearDestination();
+      setDestinationInput('');
+      isEditingDestination.current = false;
+      setTimeout(() => destinationRef.current?.focus(), 500);
+    }, [clearDestination])
+  );
+
   // Sync pickup input text when current location is resolved
   useEffect(() => {
     if (ride.pickup && !isEditingPickup.current) {
@@ -64,6 +75,10 @@ export default function HomeScreen() {
   const openBooking = () => router.push('/location-search' as any);
   const openWallet = () => router.push('/wallet');
   const openPass = () => router.push('/monthly-pass');
+  const handleSelectOnMap = () => {
+    const field = activeField || 'destination';
+    router.push(`/select-on-map?type=${field}` as any);
+  };
 
   const handleServicePress = (serviceId: HomeServiceId) => {
     if (serviceId === 'parcel') {
@@ -125,6 +140,7 @@ export default function HomeScreen() {
     setIsSearching(true);
     try {
       const coordinates = await mapService.getCoordinates(place.description);
+      console.log('[Selected Place Coordinates]', coordinates);
       const location = {
         address: place.description,
         latitude: coordinates.ltd,
@@ -166,47 +182,57 @@ export default function HomeScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         alert('Permission to access location was denied');
+        setIsLocatingManual(false);
         return;
       }
 
-      const currentLocation = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-
-      let address = 'Current location';
-      if (Platform.OS !== 'web') {
-        try {
-          const [reverseGeocodedAddress] = await Location.reverseGeocodeAsync({
-            latitude: currentLocation.coords.latitude,
-            longitude: currentLocation.coords.longitude,
-          });
-
-          if (reverseGeocodedAddress) {
-            address = [
-              reverseGeocodedAddress.name,
-              reverseGeocodedAddress.street,
-              reverseGeocodedAddress.district,
-              reverseGeocodedAddress.city,
-              reverseGeocodedAddress.region,
-            ].filter(Boolean).join(', ') || address;
-          }
-        } catch (err) {
-          console.error('Reverse geocode failed:', err);
+      // Get last known instantly, then refine in background
+      let lat = 21.2514;
+      let lng = 81.6296;
+      try {
+        const last = await Location.getLastKnownPositionAsync({ maxAge: 30000 });
+        if (last) {
+          lat = last.coords.latitude;
+          lng = last.coords.longitude;
         }
+      } catch {
+        // fallback
       }
 
-      const loc = {
-        address,
-        latitude: currentLocation.coords.latitude,
-        longitude: currentLocation.coords.longitude,
-      };
+      // Show fast result with cached location
+      setPickup({ address: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, latitude: lat, longitude: lng });
+      setPickupInput('Locating...');
+      isEditingPickup.current = true;
 
-      setPickup(loc);
-      setPickupInput(address);
-      isEditingPickup.current = false;
+      // Refine with fresh GPS in background
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low }).then(async (fresh) => {
+        const { latitude, longitude } = fresh.coords;
+        let address = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+
+        if (Platform.OS !== 'web') {
+          try {
+            const [rev] = await Location.reverseGeocodeAsync({ latitude, longitude });
+            if (rev) {
+              address = [rev.name, rev.street, rev.district, rev.city, rev.region]
+                .filter(Boolean).join(', ') || address;
+            }
+          } catch {
+            // use lat/lng
+          }
+        }
+
+        setPickup({ address, latitude, longitude });
+        setPickupInput(address);
+        isEditingPickup.current = false;
+      }).catch(() => {
+        const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        setPickupInput(fallback);
+        isEditingPickup.current = false;
+      }).finally(() => {
+        setIsLocatingManual(false);
+      });
     } catch (err) {
       console.error('Manual locate failed:', err);
-    } finally {
       setIsLocatingManual(false);
     }
   };
@@ -232,7 +258,8 @@ export default function HomeScreen() {
             onFocusPickup={() => setActiveField('pickup')}
             onFocusDestination={() => setActiveField('destination')}
             onLocateMe={handleLocateMe}
-            onSelectOnMap={openBooking}
+            onSelectOnMap={handleSelectOnMap}
+            destinationRef={destinationRef}
           />
 
           {/* Suggestions Dropdown overlay */}

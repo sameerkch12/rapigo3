@@ -13,6 +13,7 @@ interface LocationSearchCardProps {
   onFocusDestination: () => void;
   onLocateMe: () => void;
   onSelectOnMap: () => void;
+  destinationRef?: React.RefObject<TextInput | null>;
 }
 
 export default function LocationSearchCard({
@@ -25,10 +26,10 @@ export default function LocationSearchCard({
   onFocusDestination,
   onLocateMe,
   onSelectOnMap,
+  destinationRef,
 }: LocationSearchCardProps) {
   return (
     <View style={styles.card}>
-      {/* Pickup input row */}
       <View style={styles.locationRow}>
         <View style={styles.routeRail}>
           <View style={styles.pickupCircle}>
@@ -65,7 +66,6 @@ export default function LocationSearchCard({
 
       <View style={styles.cardDivider} />
 
-      {/* Destination input row */}
       <View style={styles.destinationRow}>
         <View style={styles.destinationPin}>
           <MaterialIcons name="location-on" size={24} color={Colors.primary} />
@@ -73,6 +73,7 @@ export default function LocationSearchCard({
         <View style={styles.locationCopy}>
           <Text style={styles.locationLabel}>Where to?</Text>
           <TextInput
+            ref={destinationRef}
             style={styles.inputField}
             value={destinationValue}
             onChangeText={onChangeDestination}
@@ -85,7 +86,6 @@ export default function LocationSearchCard({
         <MaterialIcons name="search" size={20} color="#64748B" />
       </View>
 
-      {/* Select on map button */}
       <TouchableOpacity style={styles.mapSelector} activeOpacity={0.85} onPress={onSelectOnMap}>
         <View style={styles.mapIconBox}>
           <MaterialIcons name="map" size={20} color={Colors.primary} />

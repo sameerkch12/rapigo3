@@ -37,4 +37,29 @@ router.post(
     captainController.resetPassword
 );
 
+router.post(
+    "/send-otp",
+    body("phone").isLength({ min: 10, max: 10 }).withMessage("Phone number must be 10 digits"),
+    captainController.sendCaptainOtp
+);
+
+router.post(
+    "/verify-otp",
+    body("phone").isLength({ min: 10, max: 10 }).withMessage("Phone number must be 10 digits"),
+    body("otp").isLength({ min: 6, max: 6 }).withMessage("OTP must be 6 digits"),
+    captainController.verifyCaptainOtp
+);
+
+router.post(
+    "/register-phone",
+    body("phone").isLength({ min: 10, max: 10 }).withMessage("Phone number must be 10 digits"),
+    body("fullname.firstname").isLength({ min: 2 }).withMessage("First name must be at least 2 characters long"),
+    body("email").isEmail().withMessage("Invalid Email"),
+    body("vehicle.color").isLength({ min: 3 }).withMessage("Color must be at least 3 characters"),
+    body("vehicle.number").isLength({ min: 3 }).withMessage("Plate must be at least 3 characters"),
+    body("vehicle.capacity").isNumeric().withMessage("Capacity must be a number"),
+    body("vehicle.type").isIn(["car", "bike", "auto"]).withMessage("Invalid vehicle type"),
+    captainController.registerPhoneCaptain
+);
+
 module.exports = router;

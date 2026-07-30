@@ -72,6 +72,44 @@ export function HomeSkeletonLoader() {
   );
 }
 
+export function ActivitySkeleton() {
+  return (
+    <View style={{ padding: 16, gap: 8 }}>
+      <Skeleton height={36} borderRadius={10} style={{ marginBottom: 8 }} />
+      {[1, 2, 3, 4].map((i) => (
+        <RideCardSkeleton key={i} />
+      ))}
+    </View>
+  );
+}
+
+export function BookRideSkeleton() {
+  return (
+    <View style={{ padding: 16, gap: 12 }}>
+      <View style={skStyles.row}>
+        <Skeleton width={24} height={24} borderRadius={12} />
+        <Skeleton width="70%" height={14} />
+      </View>
+      <View style={skStyles.row}>
+        <Skeleton width={24} height={24} borderRadius={12} />
+        <Skeleton width="60%" height={14} />
+      </View>
+      <Skeleton height={1} style={{ marginVertical: 4 }} />
+      <Skeleton width="40%" height={16} style={{ marginTop: 8 }} />
+      {[1, 2, 3].map((i) => (
+        <View key={i} style={[skStyles.card, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+          <Skeleton width={48} height={48} borderRadius={12} />
+          <View style={{ flex: 1, gap: 6 }}>
+            <Skeleton width="50%" height={14} />
+            <Skeleton width="30%" height={11} />
+          </View>
+          <Skeleton width={72} height={32} borderRadius={10} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const skStyles = StyleSheet.create({
   card: {
     backgroundColor: Colors.white,

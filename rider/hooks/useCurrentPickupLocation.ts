@@ -5,7 +5,6 @@ import { useRide } from '@/hooks/useRide';
 
 function formatAddress(address: Location.LocationGeocodedAddress) {
   if (address.formattedAddress) return address.formattedAddress;
-
   return [address.name, address.street, address.district, address.city, address.region]
     .filter(Boolean)
     .join(', ');
@@ -37,34 +36,54 @@ export function useCurrentPickupLocation() {
           return;
         }
 
-        const currentLocation = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-
-        let address = 'Current location';
-
-        // Reverse geocoding is removed on Expo Web SDK 49+
-        if (Platform.OS !== 'web') {
-          try {
-            const [reverseGeocodedAddress] = await Location.reverseGeocodeAsync({
-              latitude: currentLocation.coords.latitude,
-              longitude: currentLocation.coords.longitude,
-            });
-            address = reverseGeocodedAddress ? formatAddress(reverseGeocodedAddress) || address : address;
-          } catch {
-            address = `${currentLocation.coords.latitude.toFixed(5)}, ${currentLocation.coords.longitude.toFixed(5)}`;
+        // Step 1: Get cached location instantly (takes < 1s)
+        let lat = 21.2514;
+        let lng = 81.6296;
+        try {
+          const last = await Location.getLastKnownPositionAsync({ maxAge: 30000 });
+          if (last) {
+            lat = last.coords.latitude;
+            lng = last.coords.longitude;
           }
+        } catch {
+          // fallback to default
         }
 
+        // Show fallback address immediately so user sees something
         setPickup({
-          address,
-          latitude: currentLocation.coords.latitude,
-          longitude: currentLocation.coords.longitude,
+          address: `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          latitude: lat,
+          longitude: lng,
         });
-        setPickupText(address);
+        setPickupText('Locating...');
+
+        // Step 2: Fire fresh GPS in background (may take time)
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Low,
+        }).then(async (currentLocation) => {
+          const { latitude, longitude } = currentLocation.coords;
+          let address = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+
+          if (Platform.OS !== 'web') {
+            try {
+              const [rev] = await Location.reverseGeocodeAsync({ latitude, longitude });
+              if (rev) address = formatAddress(rev) || address;
+            } catch {
+              // use lat/lng fallback
+            }
+          }
+
+          setPickup({ address, latitude, longitude });
+          setPickupText(address);
+        }).catch(() => {
+          // GPS failed, keep last known
+          const lastAddr = ride.pickup?.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          setPickupText(lastAddr);
+        }).finally(() => {
+          setIsLocating(false);
+        });
       } catch {
         setPickupText('Unable to get current location');
-      } finally {
         setIsLocating(false);
       }
     }

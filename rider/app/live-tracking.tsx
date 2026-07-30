@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,24 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import MapView, { Marker } from '@/components/ui/MapView';
+import MapView, { Marker, Polyline } from '@/components/ui/MapView';
 import { useRide } from '@/hooks/useRide';
 import { Colors, FontSize, FontWeight, Radius, Shadow } from '@/constants/theme';
+import { mapService } from '@/services/map.service';
+import { decodePolyline } from '@/utils/polyline';
+
+const VEHICLE_LABELS: Record<string, string> = {
+  bike: 'Bike', auto: 'Auto', car: 'Car', xl: 'Car XL',
+};
+
+const VEHICLE_EMOJI: Record<string, string> = {
+  bike: '🏍️', auto: '🛺', car: '🚗', xl: '🚙',
+};
+
+function formatVehicle(type?: string | null) {
+  const key = (type || '').toLowerCase();
+  return `${VEHICLE_EMOJI[key] || '🚗'} ${VEHICLE_LABELS[key] || type || 'Ride'}`;
+}
 
 export default function LiveTrackingScreen() {
   const insets = useSafeAreaInsets();
@@ -21,6 +36,36 @@ export default function LiveTrackingScreen() {
   const { ride, cancelRide, resetRideState } = useRide();
 
   const driver = ride.selectedDriver;
+  const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
+
+  // Fetch route: driver→pickup when driver_found, pickup→destination when ongoing
+  useEffect(() => {
+    let cancelled = false;
+    const fetchRoute = async () => {
+      try {
+        let origin: string | undefined;
+        let dest: string | undefined;
+        if (ride.status === 'driver_found' && driver?.location && ride.pickup) {
+          origin = `${driver.location.latitude},${driver.location.longitude}`;
+          dest = ride.pickup.address || `${ride.pickup.latitude},${ride.pickup.longitude}`;
+        } else if (ride.status === 'ongoing' && ride.pickup && ride.destination) {
+          origin = ride.pickup.address || `${ride.pickup.latitude},${ride.pickup.longitude}`;
+          dest = ride.destination.address || `${ride.destination.latitude},${ride.destination.longitude}`;
+        }
+        if (!origin || !dest) return;
+        const res = await mapService.getDistanceTime(origin, dest);
+        if (cancelled) return;
+        if (res.status === 'OK' && res.polyline) {
+          const decoded = decodePolyline(res.polyline);
+          if (decoded.length > 0) setRouteCoords(decoded);
+        }
+      } catch {
+        if (!cancelled) setRouteCoords([]);
+      }
+    };
+    fetchRoute();
+    return () => { cancelled = true; };
+  }, [ride.status, driver?.location?.latitude, driver?.location?.longitude, ride.pickup, ride.destination]);
 
   const handleCallDriver = async () => {
     const phone = driver?.phone?.trim();
@@ -42,19 +87,43 @@ export default function LiveTrackingScreen() {
     router.replace('/(tabs)');
   };
 
+  const mapRegion = useMemo(() => {
+    const points = [];
+    if (ride.pickup) points.push({ lat: ride.pickup.latitude, lng: ride.pickup.longitude });
+    if (ride.destination) points.push({ lat: ride.destination.latitude, lng: ride.destination.longitude });
+    if (driver?.location) points.push({ lat: driver.location.latitude, lng: driver.location.longitude });
+
+    if (points.length === 0) return { latitude: 21.2514, longitude: 81.6296, latitudeDelta: 0.03, longitudeDelta: 0.03 };
+
+    const minLat = Math.min(...points.map(p => p.lat));
+    const maxLat = Math.max(...points.map(p => p.lat));
+    const minLng = Math.min(...points.map(p => p.lng));
+    const maxLng = Math.max(...points.map(p => p.lng));
+    const latPad = Math.max((maxLat - minLat) * 0.3, 0.01);
+    const lngPad = Math.max((maxLng - minLng) * 0.3, 0.01);
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: maxLat - minLat + latPad * 2,
+      longitudeDelta: maxLng - minLng + lngPad * 2,
+    };
+  }, [ride.pickup, ride.destination, driver?.location]);
+
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
       {/* Map View */}
       <View style={styles.mapArea}>
         <MapView
           style={StyleSheet.absoluteFill}
-          region={{
-            latitude: ride.pickup?.latitude || 21.2514,
-            longitude: ride.pickup?.longitude || 81.6296,
-            latitudeDelta: 0.03,
-            longitudeDelta: 0.03,
-          }}
+          region={mapRegion}
         >
+          {routeCoords.length > 0 && (
+            <Polyline
+              coordinates={routeCoords}
+              strokeColor="#2563EB"
+              strokeWidth={5}
+            />
+          )}
           {ride.pickup && (
             <Marker
               coordinate={{ latitude: ride.pickup.latitude, longitude: ride.pickup.longitude }}
@@ -73,17 +142,11 @@ export default function LiveTrackingScreen() {
             <Marker
               coordinate={{ latitude: driver.location.latitude, longitude: driver.location.longitude }}
               title={driver.name || 'Captain'}
+              pinColor="#F59E0B"
             />
           )}
         </MapView>
 
-        {/* Back Button */}
-        <TouchableOpacity
-          style={[styles.backBtn, { top: insets.top + 10 }]}
-          onPress={() => router.back()}
-        >
-          <MaterialIcons name="arrow-back" size={24} color={Colors.text.primary} />
-        </TouchableOpacity>
       </View>
 
       {/* Bottom Sheet Card */}
@@ -122,7 +185,7 @@ export default function LiveTrackingScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.driverName}>{driver?.name || 'Captain Assigned'}</Text>
                 <Text style={styles.vehicleDetails}>
-                  {driver?.color || ''} {driver?.vehicleType || ride.selectedVehicle} • {driver?.vehicleNumber || 'Plate Pending'}
+                  {formatVehicle(driver?.vehicleType || ride.selectedVehicle)} • {driver?.vehicleNumber || 'Plate Pending'}
                 </Text>
                 <Text style={styles.driverPhone}>{driver?.phone ? `+91 ${driver.phone}` : 'Number Pending'}</Text>
               </View>
@@ -134,6 +197,13 @@ export default function LiveTrackingScreen() {
                 <MaterialIcons name="call" size={22} color={Colors.primary} />
               </TouchableOpacity>
             </View>
+
+            {ride.isDriverNearPickup && (
+              <View style={styles.arrivalBanner}>
+                <MaterialIcons name="check-circle" size={18} color="#16A34A" />
+                <Text style={styles.arrivalText}>Captain has arrived at your pickup location</Text>
+              </View>
+            )}
 
             <View style={styles.tripInfo}>
               <View style={styles.infoRow}>
@@ -219,14 +289,6 @@ export default function LiveTrackingScreen() {
 
 const styles = StyleSheet.create({
   mapArea: { flex: 1 },
-  backBtn: {
-    position: 'absolute',
-    left: 16,
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 8,
-    ...Shadow.md,
-  },
   bottomSheet: {
     backgroundColor: '#FFF',
     borderTopLeftRadius: Radius.xl,
@@ -249,6 +311,23 @@ const styles = StyleSheet.create({
   },
   otpLabel: { fontSize: 10, color: '#1D4ED8', fontWeight: FontWeight.bold },
   otpValue: { fontSize: 18, color: '#1E40AF', fontWeight: FontWeight.extrabold, letterSpacing: 2 },
+  arrivalBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: Radius.md,
+    padding: 12,
+    marginBottom: 14,
+  },
+  arrivalText: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+    color: '#16A34A',
+    flex: 1,
+  },
   driverCard: {
     flexDirection: 'row',
     alignItems: 'center',

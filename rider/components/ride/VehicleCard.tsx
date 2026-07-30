@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, FontWeight, Radius } from '@/constants/theme';
 
@@ -7,7 +7,7 @@ interface VehicleCardProps {
   vehicle: {
     id: string;
     name: string;
-    emoji: string;
+    image: any;
     description: string;
     eta: number;
     seats: number;
@@ -39,12 +39,10 @@ export default function VehicleCard({ vehicle, fare, selected, onSelect }: Vehic
           { transform: [{ scale: scaleAnim }] },
         ]}
       >
-        {/* Left Vehicle Icon */}
         <View style={styles.iconWrap}>
-          <Text style={styles.emoji}>{vehicle.emoji}</Text>
+          <Image source={vehicle.image} style={styles.vehicleImg} resizeMode="contain" />
         </View>
 
-        {/* Middle Details */}
         <View style={styles.details}>
           <View style={styles.titleRow}>
             <Text style={styles.name}>{vehicle.name}</Text>
@@ -57,28 +55,27 @@ export default function VehicleCard({ vehicle, fare, selected, onSelect }: Vehic
 
           <View style={styles.subInfoRow}>
             <View style={styles.infoItem}>
-              <MaterialIcons name="person-outline" size={13} color="#94A3B8" />
+              <MaterialIcons name="person-outline" size={11} color="#94A3B8" />
               <Text style={styles.infoText}>{vehicle.seats} {vehicle.seats === 1 ? 'seat' : 'seats'}</Text>
             </View>
-            <Text style={styles.dot}>•</Text>
+            <Text style={styles.dot}>{'\u2022'}</Text>
             <View style={styles.infoItem}>
-              <MaterialIcons name="access-time" size={13} color="#94A3B8" />
+              <MaterialIcons name="access-time" size={11} color="#94A3B8" />
               <Text style={styles.infoText}>{vehicle.eta} min</Text>
             </View>
           </View>
 
           <View style={styles.ratingRow}>
-            <MaterialIcons name="star" size={13} color="#F59E0B" />
+            <MaterialIcons name="star" size={11} color="#F59E0B" />
             <Text style={styles.ratingText}>{vehicle.rating}</Text>
           </View>
         </View>
 
-        {/* Right Price & Selected Indicator */}
         <View style={styles.right}>
-          <Text style={styles.fare}>₹{fare}</Text>
+          <Text style={styles.fare}>{'\u20B9'}{fare}</Text>
           {selected && (
             <View style={styles.checkCircle}>
-              <MaterialIcons name="check" size={14} color="#FFFFFF" />
+              <MaterialIcons name="check" size={12} color="#FFFFFF" />
             </View>
           )}
         </View>
@@ -91,29 +88,30 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 18,
-    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    marginBottom: 8,
     borderWidth: 1.5,
   },
   cardSelected: {
     borderColor: '#2563EB',
-    backgroundColor: '#F8FAFF',
+    backgroundColor: '#FFFFFF',
   },
   cardUnselected: {
     borderColor: '#F1F5F9',
     backgroundColor: '#FFFFFF',
   },
   iconWrap: {
-    width: 60,
-    height: 52,
+    width: 52,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
-  emoji: {
-    fontSize: 34,
+  vehicleImg: {
+    width: 48,
+    height: 34,
   },
   details: {
     flex: 1,
@@ -122,28 +120,28 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    gap: 6,
+    marginBottom: 2,
   },
   name: {
-    fontSize: 17,
+    fontSize: 14,
     fontWeight: FontWeight.extrabold,
     color: '#0F172A',
   },
   tagPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
   },
   tagText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: FontWeight.bold,
   },
   subInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 3,
+    gap: 3,
+    marginBottom: 2,
   },
   infoItem: {
     flexDirection: 'row',
@@ -151,38 +149,38 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   infoText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748B',
     fontWeight: FontWeight.medium,
   },
   dot: {
     color: '#CBD5E1',
-    fontSize: 10,
+    fontSize: 8,
   },
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 2,
   },
   ratingText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748B',
     fontWeight: FontWeight.bold,
   },
   right: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   fare: {
-    fontSize: 22,
+    fontSize: 17,
     fontWeight: FontWeight.extrabold,
     color: '#0F172A',
   },
   checkCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#2563EB',
     alignItems: 'center',
     justifyContent: 'center',

@@ -1,6 +1,8 @@
 const asyncHandler = require("express-async-handler");
 const captainModel = require("../models/captain.model");
 const captainService = require("../services/captain.service");
+const otpModel = require("../models/otp.model");
+const otpService = require("../services/otp.service");
 const { validationResult } = require("express-validator");
 const blacklistTokenModel = require("../models/blacklistToken.model");
 const jwt = require("jsonwebtoken");
@@ -133,6 +135,105 @@ module.exports.logoutCaptain = asyncHandler(async (req, res) => {
   await blacklistTokenModel.create({ token });
 
   res.status(200).json({ message: "Logged out successfully" });
+});
+
+module.exports.sendCaptainOtp = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json(errors.array());
+
+  const { phone } = req.body;
+  const otpResult = await otpService.sendOtpSms(phone);
+  const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+
+  await otpModel.findOneAndUpdate(
+    { phone, role: "captain" },
+    { otp: otpResult.otp, otpExpires },
+    { upsert: true, new: true }
+  );
+
+  res.status(200).json({
+    message: otpResult.message,
+    isDemo: otpResult.isDemo,
+    ...(otpResult.isDemo ? { otp: otpResult.otp } : {}),
+  });
+});
+
+module.exports.verifyCaptainOtp = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json(errors.array());
+
+  const { phone, otp } = req.body;
+
+  const record = await otpModel.findOne({ phone, role: "captain" });
+  if (!record || !record.otp || !record.otpExpires) {
+    return res.status(400).json({ message: "OTP not requested or expired. Please request a new OTP." });
+  }
+  if (record.otpExpires < new Date()) {
+    return res.status(400).json({ message: "OTP has expired. Please request a new OTP." });
+  }
+  if (record.otp !== otp) {
+    return res.status(400).json({ message: "Invalid OTP. Please enter the correct code." });
+  }
+
+  await otpModel.deleteOne({ phone, role: "captain" });
+
+  const captain = await captainModel.findOne({ phone });
+  const isProfileComplete = Boolean(captain?.fullname?.firstname && captain?.email && captain?.vehicle?.type);
+
+  if (isProfileComplete) {
+    const token = captain.generateAuthToken();
+    res.cookie("token", token);
+    return res.status(200).json({
+      message: "Logged in successfully",
+      isNewCaptain: false,
+      token,
+      captain,
+    });
+  }
+
+  return res.status(200).json({
+    message: "OTP verified. Profile registration required.",
+    isNewCaptain: true,
+    phone,
+  });
+});
+
+module.exports.registerPhoneCaptain = asyncHandler(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json(errors.array());
+
+  const { phone, fullname, email, vehicle } = req.body;
+
+  const existingEmail = await captainModel.findOne({ email });
+  if (existingEmail && existingEmail.phone !== phone) {
+    return res.status(400).json({ message: "Email is already registered with another account" });
+  }
+
+  let captain = await captainModel.findOne({ phone });
+  if (!captain) {
+    captain = new captainModel({ phone });
+  }
+
+  captain.fullname = { firstname: fullname.firstname, lastname: fullname.lastname || "" };
+  captain.email = email;
+  captain.vehicle = {
+    color: vehicle.color,
+    number: vehicle.number,
+    capacity: vehicle.capacity,
+    type: vehicle.type,
+  };
+
+  await captain.save();
+
+  const token = captain.generateAuthToken();
+  res.cookie("token", token);
+
+  res.status(201).json({
+    message: "Captain profile completed & registered successfully",
+    isNewCaptain: false,
+    token,
+    captain,
+  });
 });
 
 module.exports.resetPassword = asyncHandler(async (req, res) => {

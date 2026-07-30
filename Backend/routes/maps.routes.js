@@ -22,6 +22,12 @@ router.get('/get-suggestions',
     mapController.getAutoCompleteSuggestions
 );
 
+router.get('/reverse-geocode',
+    query('lat').isString(),
+    query('lng').isString(),
+    mapController.getReverseGeocode
+);
+
 router.get('/suggestions',
     query('input').isString().isLength({ min: 3 }),
     mapController.getAutoCompleteSuggestions

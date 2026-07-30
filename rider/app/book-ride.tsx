@@ -9,6 +9,7 @@ import {
   TextInput,
   Dimensions,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -17,13 +18,15 @@ import { useRide } from '@/hooks/useRide';
 import VehicleCard from '@/components/ride/VehicleCard';
 import MapView, { Marker, Polyline } from '@/components/ui/MapView';
 import { rideService } from '@/services/ride.service';
+import { decodePolyline } from '@/utils/polyline';
 import { FontWeight, Shadow } from '@/constants/theme';
+import { BookRideSkeleton } from '@/components/ui/SkeletonLoader';
 
 const VEHICLE_TYPES = [
-  { id: 'bike', name: 'Bike', emoji: '🏍️', description: '1 seat • 3 min', eta: 3, seats: 1, rating: 4.7, tag: 'Fastest', tagColor: '#2563EB' },
-  { id: 'auto', name: 'Auto', emoji: '🛺', description: '3 seats • 6 min', eta: 6, seats: 3, rating: 4.5, tag: 'Affordable', tagColor: '#16A34A' },
-  { id: 'car', name: 'Car', emoji: '🚗', description: '4 seats • 8 min', eta: 8, seats: 4, rating: 4.8, tag: 'Premium', tagColor: '#9333EA' },
-  { id: 'xl', name: 'Car XL', emoji: '🚙', description: '6 seats • 10 min', eta: 10, seats: 6, rating: 4.9, tag: 'Spacious', tagColor: '#2563EB' },
+  { id: 'bike', name: 'Bike', image: require('@/assets/images/Bike.jpeg'), description: '1 seat • 3 min', eta: 3, seats: 1, rating: 4.7, tag: 'Fastest', tagColor: '#2563EB' },
+  { id: 'auto', name: 'Auto', image: require('@/assets/images/Auto.jpeg'), description: '3 seats • 6 min', eta: 6, seats: 3, rating: 4.5, tag: 'Affordable', tagColor: '#16A34A' },
+  { id: 'car', name: 'Car', image: require('@/assets/images/Car.jpeg'), description: '4 seats • 8 min', eta: 8, seats: 4, rating: 4.8, tag: 'Premium', tagColor: '#9333EA' },
+  { id: 'xl', name: 'Car XL', image: require('@/assets/images/CarXL.jpeg'), description: '6 seats • 10 min', eta: 10, seats: 6, rating: 4.9, tag: 'Spacious', tagColor: '#2563EB' },
 ];
 
 const { height } = Dimensions.get('window');
@@ -35,7 +38,7 @@ export default function BookRideScreen() {
 
 
 
-  const MAP_HEIGHT = height * 0.38;
+  const MAP_HEIGHT = height * 0.36;
 
   // Calculate region that fits both pickup and drop zoomed in closely
   const mapRegion = useMemo(() => {
@@ -73,6 +76,7 @@ export default function BookRideScreen() {
   // Real data from /places/route API — replaces hardcoded Haversine + priceTable
   const [apiFares, setApiFares] = useState<Record<string, number>>({});
   const [apiDistanceKm, setApiDistanceKm] = useState<number>(0);
+  const [loadingFare, setLoadingFare] = useState(true);
 
   // Fetch actual turn-by-turn road route coordinates between pickup and destination
   useEffect(() => {
@@ -81,17 +85,32 @@ export default function BookRideScreen() {
       return;
     }
 
+    setRouteCoordinates([]);
+    setApiDistanceKm(0);
+    setApiFares({});
+
+    let isCancelled = false;
+
     const fetchRoadRoute = async () => {
+      setLoadingFare(true);
       try {
         const pickupAddr = ride.pickup?.address || `${ride.pickup!.latitude},${ride.pickup!.longitude}`;
         const destAddr = ride.destination?.address || `${ride.destination!.latitude},${ride.destination!.longitude}`;
 
         const response = await rideService.getFare(pickupAddr, destAddr);
-        
-        setRouteCoordinates([
-          { latitude: ride.pickup!.latitude, longitude: ride.pickup!.longitude },
-          { latitude: ride.destination!.latitude, longitude: ride.destination!.longitude },
-        ]);
+
+        if (isCancelled) return;
+
+        // Decode the real driving route polyline; fall back to straight line
+        const decoded = response.polyline ? decodePolyline(response.polyline) : [];
+        if (decoded.length > 0) {
+          setRouteCoordinates(decoded);
+        } else {
+          setRouteCoordinates([
+            { latitude: ride.pickup!.latitude, longitude: ride.pickup!.longitude },
+            { latitude: ride.destination!.latitude, longitude: ride.destination!.longitude },
+          ]);
+        }
 
         if (response.distanceTime?.distance?.value) {
           setApiDistanceKm(Math.round((response.distanceTime.distance.value / 1000) * 10) / 10);
@@ -107,16 +126,23 @@ export default function BookRideScreen() {
           selectVehicle(selectedId, fares[selectedId] || 0);
         }
       } catch (err) {
+        if (isCancelled) return;
         console.warn('Fetching fare from backend failed:', err);
         setRouteCoordinates([
           { latitude: ride.pickup!.latitude, longitude: ride.pickup!.longitude },
           { latitude: ride.destination!.latitude, longitude: ride.destination!.longitude },
         ]);
+      } finally {
+        if (!isCancelled) setLoadingFare(false);
       }
     };
 
     fetchRoadRoute();
-  }, [ride.pickup, ride.destination, selectVehicle, selectedId]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [ride.pickup?.address, ride.pickup?.latitude, ride.pickup?.longitude, ride.destination?.address, ride.destination?.latitude, ride.destination?.longitude]);
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showCouponModal, setShowCouponModal] = useState(false);
@@ -182,6 +208,19 @@ export default function BookRideScreen() {
 
   const [mapReady, setMapReady] = useState(false);
 
+  if (loadingFare) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+        <View style={[styles.mapArea, { height: MAP_HEIGHT, justifyContent: 'center', alignItems: 'center' }]}>
+          <ActivityIndicator size="large" color="#2563EB" />
+        </View>
+        <View style={[styles.sheet]}>
+          <BookRideSkeleton />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
       {/* Clean Interactive Map View */}
@@ -193,18 +232,21 @@ export default function BookRideScreen() {
         >
           {ride.pickup && (
             <Marker
+              key={`pickup-${ride.pickup.latitude}-${ride.pickup.longitude}`}
               coordinate={{ latitude: ride.pickup.latitude, longitude: ride.pickup.longitude }}
               pinColor="#16A34A"
             />
           )}
           {ride.destination && (
             <Marker
+              key={`drop-${ride.destination.latitude}-${ride.destination.longitude}`}
               coordinate={{ latitude: ride.destination.latitude, longitude: ride.destination.longitude }}
               pinColor="#DC2626"
             />
           )}
           {routeCoordinates.length > 0 && (
             <Polyline
+              key={`route-${routeCoordinates.length}`}
               coordinates={routeCoordinates}
               strokeColor="#2563EB"
               strokeWidth={5}
@@ -235,6 +277,7 @@ export default function BookRideScreen() {
           { transform: [{ translateY: slideAnim }] },
         ]}
       >
+        <>
         {/* Location Summary Box with Green/Red Edit Buttons & Swap Arrow */}
         <View style={styles.locationContainerRow}>
           <View style={styles.locationSummaryBox}>
@@ -248,7 +291,7 @@ export default function BookRideScreen() {
               </Text>
               <TouchableOpacity
                 style={[styles.editPillBtn, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}
-                onPress={() => router.push('/location-search' as any)}
+                onPress={() => router.push('/select-on-map?type=pickup' as any)}
               >
                 <MaterialIcons name="edit" size={13} color="#16A34A" />
                 <Text style={[styles.editPillText, { color: '#16A34A' }]}>Edit</Text>
@@ -268,7 +311,7 @@ export default function BookRideScreen() {
               </Text>
               <TouchableOpacity
                 style={[styles.editPillBtn, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
-                onPress={() => router.push('/location-search' as any)}
+                onPress={() => router.push('/select-on-map?type=destination' as any)}
               >
                 <MaterialIcons name="edit" size={13} color="#DC2626" />
                 <Text style={[styles.editPillText, { color: '#DC2626' }]}>Edit</Text>
@@ -286,7 +329,7 @@ export default function BookRideScreen() {
         <Text style={styles.chooseTitle}>Choose a ride</Text>
 
         {/* Vehicles List */}
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: height * 0.38 }}>
+        <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
           {VEHICLE_TYPES.map((v) => (
             <VehicleCard
               key={v.id}
@@ -333,6 +376,7 @@ export default function BookRideScreen() {
             {searching ? 'Finding Driver...' : `Book ${selectedVehicleObj.name} • ₹${discountedFare}`}
           </Text>
         </TouchableOpacity>
+        </>
       </Animated.View>
 
       {/* Payment Selection Modal */}
@@ -398,29 +442,29 @@ const styles = StyleSheet.create({
   },
   distanceBadge: {
     position: 'absolute',
-    right: 16,
+    right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     ...Shadow.sm,
   },
   distanceText: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: FontWeight.extrabold,
     color: '#0F172A',
   },
   backBtn: {
     position: 'absolute',
-    left: 16,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    left: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -430,120 +474,120 @@ const styles = StyleSheet.create({
   sheet: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    marginTop: -20,
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    marginTop: -16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
     ...Shadow.lg,
   },
   locationContainerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 12,
   },
   locationSummaryBox: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    padding: 12,
+    padding: 10,
   },
   locRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   locRing: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   locDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
   locText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: FontWeight.bold,
     color: '#0F172A',
   },
   locDottedLine: {
     width: 1,
-    height: 14,
+    height: 12,
     borderStyle: 'dashed',
     borderLeftWidth: 1,
     borderColor: '#CBD5E1',
-    marginLeft: 7,
-    marginVertical: 4,
+    marginLeft: 6,
+    marginVertical: 3,
   },
   editPillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
     borderWidth: 1,
   },
   editPillText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: FontWeight.bold,
   },
   swapVerticalBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   chooseTitle: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: FontWeight.extrabold,
     color: '#0F172A',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   bottomControlsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 10,
-    marginBottom: 14,
+    gap: 10,
+    marginTop: 8,
+    marginBottom: 10,
   },
   controlPill: {
     flex: 1,
-    height: 46,
-    borderRadius: 14,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    gap: 8,
+    paddingHorizontal: 10,
+    gap: 6,
   },
   controlLabel: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: FontWeight.bold,
     color: '#0F172A',
   },
   bookRideButton: {
-    height: 54,
-    borderRadius: 27,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#2563EB',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
+    gap: 6,
+    paddingHorizontal: 14,
     ...Shadow.md,
   },
   bookRideButtonDisabled: {
@@ -551,7 +595,7 @@ const styles = StyleSheet.create({
   },
   bookRideButtonText: {
     textAlign: 'center',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: FontWeight.extrabold,
     color: '#FFFFFF',
   },
@@ -562,67 +606,67 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: FontWeight.extrabold,
     color: '#0F172A',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   modalRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
+    gap: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
   modalRowText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: FontWeight.bold,
     color: '#0F172A',
   },
   couponInputModal: {
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 48,
-    fontSize: 14,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 42,
+    fontSize: 13,
     color: '#0F172A',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   errorTextModal: {
     color: '#DC2626',
-    fontSize: 12,
-    marginBottom: 12,
+    fontSize: 11,
+    marginBottom: 10,
   },
   applyBtnModal: {
     backgroundColor: '#2563EB',
-    height: 46,
-    borderRadius: 12,
+    height: 40,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   applyBtnTextModal: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: FontWeight.bold,
   },
   closeBtn: {
-    height: 44,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    marginTop: 2,
   },
   closeBtnText: {
     color: '#64748B',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: FontWeight.bold,
   },
 });

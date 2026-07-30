@@ -14,6 +14,17 @@ interface DriverAuthContextType {
     phone?: string;
     vehicle: { color: string; number: string; capacity: number; type: 'car' | 'bike' | 'auto' };
   }) => Promise<void>;
+  sendPhoneOtp: (phone: string) => Promise<{ message: string; isDemo?: boolean; otp?: string }>;
+  verifyPhoneOtp: (
+    phone: string,
+    otp: string
+  ) => Promise<{ isNewCaptain: boolean; phone?: string }>;
+  registerPhoneCaptain: (data: {
+    phone: string;
+    fullname: { firstname: string; lastname?: string };
+    email: string;
+    vehicle: { color: string; number: string; capacity: number; type: 'car' | 'bike' | 'auto' };
+  }) => Promise<void>;
   logout: () => Promise<void>;
   updateDriverState: (partial: Partial<CaptainProfile>) => void;
   refreshProfile: () => Promise<void>;
@@ -80,6 +91,37 @@ export const DriverAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
+  const sendPhoneOtp = async (phone: string) => {
+    return await captainService.sendPhoneOtp(phone);
+  };
+
+  const verifyPhoneOtp = async (phone: string, otp: string) => {
+    const res = await captainService.verifyPhoneOtp(phone, otp);
+    if (!res.isNewCaptain && res.token && res.captain) {
+      setDriver(res.captain);
+      setToken(res.token);
+      joinCaptainSocket(res.captain._id);
+    }
+    return { isNewCaptain: res.isNewCaptain, phone: res.phone };
+  };
+
+  const registerPhoneCaptain = async (data: {
+    phone: string;
+    fullname: { firstname: string; lastname?: string };
+    email: string;
+    vehicle: { color: string; number: string; capacity: number; type: 'car' | 'bike' | 'auto' };
+  }) => {
+    setIsLoading(true);
+    try {
+      const res = await captainService.registerPhoneCaptain(data);
+      setDriver(res.captain);
+      setToken(res.token);
+      joinCaptainSocket(res.captain._id);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = async () => {
     setIsLoading(true);
     try {
@@ -103,6 +145,9 @@ export const DriverAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         isLoading,
         login,
         register,
+        sendPhoneOtp,
+        verifyPhoneOtp,
+        registerPhoneCaptain,
         logout,
         updateDriverState,
         refreshProfile,
