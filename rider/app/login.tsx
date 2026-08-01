@@ -234,7 +234,7 @@ export default function LoginScreen() {
                 />
 
                 <TouchableOpacity style={styles.resendBtn} onPress={handleSendOtp} disabled={isLoading}>
-                  <Text style={styles.resendText}>Didn't receive code? Resend OTP</Text>
+                  <Text style={styles.resendText}>Didn{"'"}t receive code? Resend OTP</Text>
                 </TouchableOpacity>
               </>
             )}

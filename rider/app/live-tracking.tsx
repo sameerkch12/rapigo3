@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,13 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import MapView, { Marker, Polyline } from '@/components/ui/MapView';
+import SmoothDriverMarker from '@/components/ui/SmoothDriverMarker';
 import { useRide } from '@/hooks/useRide';
 import { Colors, FontSize, FontWeight, Radius, Shadow } from '@/constants/theme';
 import { mapService } from '@/services/map.service';
@@ -25,6 +27,10 @@ const VEHICLE_EMOJI: Record<string, string> = {
   bike: '🏍️', auto: '🛺', car: '🚗', xl: '🚙',
 };
 
+const DRIVER_BIKE_IMG = require('@/assets/images/driver_bike.png');
+
+const ROUTE_REFRESH_MS = 25000;
+
 function formatVehicle(type?: string | null) {
   const key = (type || '').toLowerCase();
   return `${VEHICLE_EMOJI[key] || '🚗'} ${VEHICLE_LABELS[key] || type || 'Ride'}`;
@@ -37,16 +43,21 @@ export default function LiveTrackingScreen() {
 
   const driver = ride.selectedDriver;
   const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [driverEta, setDriverEta] = useState('');
+  const driverLocRef = useRef(driver?.location || null);
+  if (driver?.location) driverLocRef.current = driver.location;
 
-  // Fetch route: driver→pickup when driver_found, pickup→destination when ongoing
+  // Fetch route: driver→pickup when driver_found, pickup→destination when ongoing.
+  // Only re-fetched when the driver is (re)assigned or the status changes — NOT on
+  // every 5s GPS ping — so the polyline does not reload and jitter every few seconds.
   useEffect(() => {
     let cancelled = false;
     const fetchRoute = async () => {
       try {
         let origin: string | undefined;
         let dest: string | undefined;
-        if (ride.status === 'driver_found' && driver?.location && ride.pickup) {
-          origin = `${driver.location.latitude},${driver.location.longitude}`;
+        if (ride.status === 'driver_found' && driverLocRef.current && ride.pickup) {
+          origin = `${driverLocRef.current.latitude},${driverLocRef.current.longitude}`;
           dest = ride.pickup.address || `${ride.pickup.latitude},${ride.pickup.longitude}`;
         } else if (ride.status === 'ongoing' && ride.pickup && ride.destination) {
           origin = ride.pickup.address || `${ride.pickup.latitude},${ride.pickup.longitude}`;
@@ -55,6 +66,7 @@ export default function LiveTrackingScreen() {
         if (!origin || !dest) return;
         const res = await mapService.getDistanceTime(origin, dest);
         if (cancelled) return;
+        if (ride.status === 'driver_found' && res.duration?.text) setDriverEta(res.duration.text);
         if (res.status === 'OK' && res.polyline) {
           const decoded = decodePolyline(res.polyline);
           if (decoded.length > 0) setRouteCoords(decoded);
@@ -64,8 +76,10 @@ export default function LiveTrackingScreen() {
       }
     };
     fetchRoute();
-    return () => { cancelled = true; };
-  }, [ride.status, driver?.location?.latitude, driver?.location?.longitude, ride.pickup, ride.destination]);
+    // Keep the approaching route roughly fresh without reloading on every ping.
+    const refresh = setInterval(fetchRoute, ROUTE_REFRESH_MS);
+    return () => { cancelled = true; clearInterval(refresh); };
+  }, [ride.status, driver?.id, ride.pickup, ride.destination]);
 
   const handleCallDriver = async () => {
     const phone = driver?.phone?.trim();
@@ -107,7 +121,9 @@ export default function LiveTrackingScreen() {
       latitudeDelta: maxLat - minLat + latPad * 2,
       longitudeDelta: maxLng - minLng + lngPad * 2,
     };
-  }, [ride.pickup, ride.destination, driver?.location]);
+    // Camera is fitted once per driver assignment — it does NOT re-center on every
+    // 5s location ping, which is what made the map appear to jump around.
+  }, [ride.pickup, ride.destination, driver?.id]);
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -138,14 +154,29 @@ export default function LiveTrackingScreen() {
               pinColor={Colors.error}
             />
           )}
-          {driver?.location && (
+          {driver?.location && Platform.OS !== 'web' && (driver?.vehicleType || ride.selectedVehicle || '').toLowerCase() === 'bike' ? (
+            <SmoothDriverMarker
+              target={driver.location}
+              image={DRIVER_BIKE_IMG}
+              title={driver.name || 'Captain'}
+            />
+          ) : driver?.location ? (
             <Marker
               coordinate={{ latitude: driver.location.latitude, longitude: driver.location.longitude }}
               title={driver.name || 'Captain'}
               pinColor="#F59E0B"
             />
-          )}
+          ) : null}
         </MapView>
+
+        {ride.status === 'driver_found' && driverEta && (
+          <View style={styles.etaChip}>
+            <MaterialIcons name="two-wheeler" size={16} color={Colors.primary} />
+            <Text style={styles.etaText}>
+              {driver?.name?.split(' ')[0] || 'Captain'} is coming by this route • approx {driverEta}
+            </Text>
+          </View>
+        )}
 
       </View>
 
@@ -289,6 +320,24 @@ export default function LiveTrackingScreen() {
 
 const styles = StyleSheet.create({
   mapArea: { flex: 1 },
+  etaChip: {
+    position: 'absolute' as any,
+    top: 16,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    ...Shadow.md,
+  },
+  etaText: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    color: Colors.text.primary,
+  },
   bottomSheet: {
     backgroundColor: '#FFF',
     borderTopLeftRadius: Radius.xl,

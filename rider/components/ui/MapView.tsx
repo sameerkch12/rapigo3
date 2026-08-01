@@ -23,6 +23,9 @@ export interface MarkerProps {
   coordinate: { latitude: number; longitude: number };
   title?: string;
   pinColor?: string;
+  anchor?: { x: number; y: number };
+  rotation?: number;
+  tracksViewChanges?: boolean;
   children?: React.ReactNode;
 }
 
@@ -163,6 +166,9 @@ function NativeMapView({ region, initialRegion, children, onMapReady }: MapViewP
             coordinate={child.props.coordinate}
             title={child.props.title}
             pinColor={child.props.pinColor}
+            anchor={child.props.anchor}
+            rotation={child.props.rotation}
+            tracksViewChanges={child.props.tracksViewChanges}
           >
             {child.props.children}
           </RNMarker>

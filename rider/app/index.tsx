@@ -25,7 +25,7 @@ export default function Index() {
     return <Redirect href="/login" />;
   }
 
-  if (ride.id && ride.status !== 'idle' && ride.status !== 'searching' && ride.status !== 'pending') {
+  if (ride.id && ride.status !== 'idle' && ride.status !== 'searching') {
     return <Redirect href="/live-tracking" />;
   }
 

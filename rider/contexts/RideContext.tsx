@@ -165,7 +165,7 @@ export function RideProvider({ children }: { children: ReactNode }) {
     });
 
     subscribeToDriverLocation((locData) => {
-      if (!rideIdRef.current || !locData || !locData.latitude || !locData.longitude) return;
+      if (!rideIdRef.current || !locData || typeof locData.latitude !== 'number' || typeof locData.longitude !== 'number') return;
       setRide((prev) => {
         if (!prev.selectedDriver) return prev;
         const distance = prev.pickup
@@ -196,7 +196,7 @@ export function RideProvider({ children }: { children: ReactNode }) {
     const restoreActiveRide = async () => {
       try {
         const { ride: activeRide } = await rideService.getActiveRide();
-        if (activeRide && (activeRide.status === 'searching' || activeRide.status === 'pending')) {
+        if (activeRide && activeRide.status === 'pending') {
           // Stale searching/pending ride — cancel on backend and don't restore
           try { await rideService.cancelRide(activeRide._id); } catch {}
         } else if (activeRide) {
