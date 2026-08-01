@@ -266,6 +266,7 @@ module.exports.getActiveRideUser = async (req, res) => {
   try {
     const ride = await rideModel
       .findOne({ user: req.user._id, status: { $in: ["pending", "accepted", "ongoing"] } })
+      .select("+otp")
       .populate("user", "fullname phone socketId")
       .populate("captain", "fullname phone socketId vehicle location");
 

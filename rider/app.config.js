@@ -2,6 +2,7 @@ module.exports = ({ config }) => ({
   ...config,
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL || '',
+    eas: config.extra?.eas || {},
   },
   ios: {
     ...config.ios,

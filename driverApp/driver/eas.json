@@ -14,13 +14,15 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://staging-api.rapigo.com"
+        "EXPO_PUBLIC_API_BASE_URL": "http://54.211.61.241:4000",
+        "EXPO_PUBLIC_GOOGLE_MAPS_KEY": "AIzaSyDBAtdcoq0rSKqYgCtfviaZTXgvUFhlVAg"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://api.rapigo.com"
+        "EXPO_PUBLIC_API_BASE_URL": "http://54.211.61.241:4000",
+        "EXPO_PUBLIC_GOOGLE_MAPS_KEY": "AIzaSyDBAtdcoq0rSKqYgCtfviaZTXgvUFhlVAg"
       }
     }
   },

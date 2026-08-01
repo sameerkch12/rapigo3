@@ -15,6 +15,7 @@
       }
     },
     "android": {
+      "package": "com.rapigo.driver",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -35,6 +36,14 @@
     "plugins": [
       "expo-router",
       [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
@@ -50,6 +59,14 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "apiBaseUrl": "",
+      "eas": {
+        "projectId": "972e31dc-d5f8-4dda-8702-1f27a934ee0c"
+      },
+      "router": {}
+    },
+    "owner": "sameerkch"
   }
 }
