@@ -139,19 +139,24 @@ export default function HomeScreen() {
   const handleSelectPlace = async (place: Suggestion) => {
     setIsSearching(true);
     try {
-      const coordinates = await mapService.getCoordinates(place.description);
-      console.log('[Selected Place Coordinates]', coordinates);
+      let coords = { ltd: 0, lng: 0 };
+      try {
+        coords = await mapService.getCoordinates(place.description);
+        console.log('[Selected Place Coordinates]', coords);
+      } catch (e) {
+        console.warn('Coordinates fetch failed, using fallback:', e);
+      }
       const location = {
         address: place.description,
-        latitude: coordinates.ltd,
-        longitude: coordinates.lng,
+        latitude: coords.ltd,
+        longitude: coords.lng,
       };
 
       if (activeField === 'pickup') {
         setPickup(location);
         setPickupInput(location.address);
         isEditingPickup.current = false;
-        
+
         // If destination is already set, jump straight to booking page
         if (ride.destination) {
           router.push('/book-ride');
@@ -161,15 +166,10 @@ export default function HomeScreen() {
         setDestinationInput(location.address);
         isEditingDestination.current = false;
 
-        // Ensure pickup exists before jumping to booking page
-        if (!ride.pickup) {
-          setPickup({
-            address: 'Current Location, Raipur',
-            latitude: 21.2514,
-            longitude: 81.6296,
-          });
+        // Jump to booking page once pickup is set (automatic or manually selected)
+        if (ride.pickup) {
+          router.push('/book-ride');
         }
-        router.push('/book-ride');
       }
     } catch (err) {
       console.error('Error getting location details:', err);
