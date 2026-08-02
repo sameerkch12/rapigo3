@@ -161,10 +161,15 @@ export default function HomeScreen() {
         setDestinationInput(location.address);
         isEditingDestination.current = false;
 
-        // If pickup is already set, jump straight to booking page
-        if (ride.pickup) {
-          router.push('/book-ride');
+        // Ensure pickup exists before jumping to booking page
+        if (!ride.pickup) {
+          setPickup({
+            address: 'Current Location, Raipur',
+            latitude: 21.2514,
+            longitude: 81.6296,
+          });
         }
+        router.push('/book-ride');
       }
     } catch (err) {
       console.error('Error getting location details:', err);
