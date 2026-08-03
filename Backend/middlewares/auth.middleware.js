@@ -79,6 +79,7 @@ module.exports.authCaptain = async (req, res, next) => {
       emailVerified: captain.emailVerified,
       vehicle: captain.vehicle,
       status: captain.status,
+      walletBalance: captain.walletBalance || 0,
     };
     req.userType = "captain";
     next();

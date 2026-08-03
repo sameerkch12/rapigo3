@@ -244,4 +244,54 @@ export const captainService = {
   async getActiveRide(): Promise<{ ride: any | null }> {
     return await api<{ ride: any | null }>('/ride/captain-active-ride');
   },
+
+  async getWallet(): Promise<{
+    balance: number;
+    rechargeLimit: number;
+    transactions: Array<{
+      _id: string;
+      type: 'ride_cash' | 'ride_online' | 'recharge' | 'withdraw' | 'adjustment';
+      amount: number;
+      balanceAfter: number;
+      rideId?: string;
+      note?: string;
+      createdAt: string;
+    }>;
+  }> {
+    return await api('/captain/wallet');
+  },
+
+  async getEarnings(): Promise<{
+    summary: {
+      totalRides: number;
+      totalGross: number;
+      totalCommission: number;
+      netEarnings: number;
+      cashCollected: number;
+      onlinePending: number;
+      today: { rides: number; netEarnings: number; gross: number };
+      week: { rides: number; netEarnings: number; gross: number };
+      month: { rides: number; netEarnings: number; gross: number };
+    };
+    trips: Array<{
+      _id: string;
+      pickup: string;
+      destination: string;
+      fare: number;
+      commission: number;
+      driverEarning: number;
+      paymentMethod: string;
+      createdAt: string;
+    }>;
+  }> {
+    return await api('/captain/earnings');
+  },
+
+  async rechargeWallet(amount: number, adminKey: string, note?: string): Promise<{ message: string; balance: number }> {
+    return await api('/captain/wallet/recharge', {
+      method: 'POST',
+      headers: { 'x-admin-key': adminKey },
+      body: JSON.stringify({ amount, note }),
+    });
+  },
 };

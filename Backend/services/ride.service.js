@@ -1,5 +1,6 @@
 const captainModel = require("../models/captain.model");
 const rideModel = require("../models/ride.model");
+const walletTransactionModel = require("../models/wallet-transaction.model");
 const mapService = require("./map.service");
 const crypto = require("crypto");
 
@@ -60,6 +61,7 @@ module.exports.createRide = async ({
   pickup,
   destination,
   vehicleType,
+  paymentMethod,
 }) => {
   if (!user || !pickup || !destination || !vehicleType) {
     throw new Error("All fields are required");
@@ -94,6 +96,7 @@ module.exports.createRide = async ({
       vehicle: vehicleType,
       distance: distanceTime.distance.value,
       duration: distanceTime.duration.value,
+      paymentMethod: paymentMethod === "online" ? "online" : "cash",
     });
 
     return ride;
@@ -207,15 +210,53 @@ module.exports.endRide = async ({ rideId, captain }) => {
     throw new Error("Ride not ongoing");
   }
 
-  const updatedRide = await rideModel.findOneAndUpdate(
-    {
-      _id: rideId,
-    },
-    {
-      status: "completed",
-    },
-    { new: true }
-  ).populate("user").populate("captain");
+  // Settle wallet exactly once (idempotent via walletUpdated flag)
+  let updatedRide = await rideModel
+    .findOneAndUpdate(
+      { _id: rideId, status: "ongoing", walletUpdated: { $ne: true } },
+      { status: "completed", walletUpdated: true },
+      { new: true }
+    )
+    .populate("user")
+    .populate("captain");
+
+  if (!updatedRide) {
+    updatedRide = await rideModel
+      .findOne({ _id: rideId })
+      .populate("user")
+      .populate("captain");
+  }
+
+  try {
+    const commissionPercent = Number(process.env.COMMISSION_PERCENT) || 20;
+    const fare = updatedRide.fare || 0;
+    const commission = Math.round((fare * commissionPercent) / 100);
+    const driverEarning = fare - commission;
+
+    await rideModel.findByIdAndUpdate(rideId, { commission, driverEarning });
+
+    const captainDoc = await captainModel.findOne({ _id: captain._id });
+    if (captainDoc) {
+      const isCash = updatedRide.paymentMethod === "cash";
+      const amount = isCash ? -commission : driverEarning;
+      const balanceAfter = (captainDoc.walletBalance || 0) + amount;
+      captainDoc.walletBalance = balanceAfter;
+      await captainDoc.save();
+
+      await walletTransactionModel.create({
+        captain: captainDoc._id,
+        type: isCash ? "ride_cash" : "ride_online",
+        amount,
+        balanceAfter,
+        rideId: updatedRide._id,
+        note: isCash
+          ? `Cash ride — ${commissionPercent}% commission on ₹${fare}`
+          : `Online ride earnings — ₹${fare} minus ${commissionPercent}% commission`,
+      });
+    }
+  } catch (walletErr) {
+    console.error("Wallet settlement failed for ride", rideId, walletErr);
+  }
 
   return updatedRide;
 };

@@ -28,6 +28,12 @@ router.post("/update",
 
 router.get("/profile", authCaptain, captainController.captainProfile);
 
+router.get("/wallet", authCaptain, captainController.getWallet);
+
+router.get("/earnings", authCaptain, captainController.getEarnings);
+
+router.post("/wallet/recharge", authCaptain, captainController.rechargeWallet);
+
 router.get("/logout", authCaptain, captainController.logoutCaptain);
 
 router.post(

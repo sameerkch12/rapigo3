@@ -3,6 +3,8 @@ const captainModel = require("../models/captain.model");
 const captainService = require("../services/captain.service");
 const otpModel = require("../models/otp.model");
 const otpService = require("../services/otp.service");
+const rideModel = require("../models/ride.model");
+const walletTransactionModel = require("../models/wallet-transaction.model");
 const { validationResult } = require("express-validator");
 const blacklistTokenModel = require("../models/blacklistToken.model");
 const jwt = require("jsonwebtoken");
@@ -262,4 +264,120 @@ module.exports.resetPassword = asyncHandler(async (req, res) => {
   await captain.save();
 
   res.status(200).json({ message: "Your password has been successfully reset. You can now log in with your new credentials" });
+});
+
+module.exports.getWallet = asyncHandler(async (req, res) => {
+  const captain = await captainModel.findById(req.captain._id);
+  const transactions = await walletTransactionModel
+    .find({ captain: req.captain._id })
+    .sort({ createdAt: -1 })
+    .limit(100);
+
+  res.status(200).json({
+    balance: captain?.walletBalance || 0,
+    rechargeLimit: Number(process.env.WALLET_RECHARGE_LIMIT) || -500,
+    transactions,
+  });
+});
+
+module.exports.getEarnings = asyncHandler(async (req, res) => {
+  const rides = await rideModel
+    .find({ captain: req.captain._id, status: "completed" })
+    .sort({ createdAt: -1 });
+
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - now.getDay());
+  startOfWeek.setHours(0, 0, 0, 0);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const inRange = (d, start) => d && d >= start;
+
+  const summary = {
+    totalRides: rides.length,
+    totalGross: 0,
+    totalCommission: 0,
+    netEarnings: 0,
+    cashCollected: 0,
+    onlinePending: 0,
+    today: { rides: 0, netEarnings: 0, gross: 0 },
+    week: { rides: 0, netEarnings: 0, gross: 0 },
+    month: { rides: 0, netEarnings: 0, gross: 0 },
+  };
+
+  rides.forEach((r) => {
+    const gross = r.fare || 0;
+    const net = r.driverEarning || gross - (r.commission || 0);
+    const created = r.createdAt;
+    summary.totalGross += gross;
+    summary.totalCommission += r.commission || 0;
+    summary.netEarnings += net;
+    if (r.paymentMethod === "cash") {
+      summary.cashCollected += net;
+    } else {
+      summary.onlinePending += net;
+    }
+    if (inRange(created, startOfDay)) {
+      summary.today.rides += 1;
+      summary.today.gross += gross;
+      summary.today.netEarnings += net;
+    }
+    if (inRange(created, startOfWeek)) {
+      summary.week.rides += 1;
+      summary.week.gross += gross;
+      summary.week.netEarnings += net;
+    }
+    if (inRange(created, startOfMonth)) {
+      summary.month.rides += 1;
+      summary.month.gross += gross;
+      summary.month.netEarnings += net;
+    }
+  });
+
+  const trips = rides.slice(0, 50).map((r) => ({
+    _id: r._id,
+    pickup: r.pickup,
+    destination: r.destination,
+    fare: r.fare,
+    commission: r.commission,
+    driverEarning: r.driverEarning,
+    paymentMethod: r.paymentMethod,
+    createdAt: r.createdAt,
+  }));
+
+  res.status(200).json({ summary, trips });
+});
+
+module.exports.rechargeWallet = asyncHandler(async (req, res) => {
+  const isDemo = process.env.DEMO_RECHARGE === "true";
+  const adminKey = req.headers["x-admin-key"];
+  if (!isDemo && (!adminKey || adminKey !== process.env.ADMIN_KEY)) {
+    return res.status(403).json({ message: "Forbidden: invalid admin key" });
+  }
+
+  const { amount, note } = req.body;
+  if (!amount || Number(amount) <= 0) {
+    return res.status(400).json({ message: "Recharge amount must be greater than 0" });
+  }
+
+  const captain = await captainModel.findById(req.captain._id);
+  if (!captain) {
+    return res.status(404).json({ message: "Captain not found" });
+  }
+
+  const credit = Number(amount);
+  const balanceAfter = (captain.walletBalance || 0) + credit;
+  captain.walletBalance = balanceAfter;
+  await captain.save();
+
+  await walletTransactionModel.create({
+    captain: captain._id,
+    type: "recharge",
+    amount: credit,
+    balanceAfter,
+    note: note || "Wallet recharge",
+  });
+
+  res.status(200).json({ message: "Wallet recharged", balance: balanceAfter });
 });

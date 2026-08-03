@@ -283,6 +283,7 @@ export function RideProvider({ children }: { children: ReactNode }) {
       pickup: ride.pickup.address,
       destination: ride.destination.address,
       vehicleType: ride.selectedVehicle === 'xl' ? 'car' : ride.selectedVehicle,
+      paymentMethod: ride.paymentMethod === 'cash' ? 'cash' : 'online',
     });
 
     rideIdRef.current = createdRide._id;

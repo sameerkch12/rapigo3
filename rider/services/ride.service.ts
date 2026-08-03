@@ -35,6 +35,7 @@ export const rideService = {
     pickup: string;
     destination: string;
     vehicleType: string;
+    paymentMethod?: string;
   }): Promise<Ride> {
     return await api<Ride>('/ride/create', {
       method: 'POST',

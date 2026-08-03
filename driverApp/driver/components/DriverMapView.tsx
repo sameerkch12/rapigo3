@@ -36,7 +36,7 @@ function NativeDriverMap({ pickup, destination, driverLocation, mode, routeCoord
         initialRegion={region}
         showsUserLocation
         showsMyLocationButton
-        followUserLocation
+        followsUserLocation
       >
         {pickupCoords && (
           <Marker coordinate={pickupCoords} title="Pickup" pinColor="#00C853" />

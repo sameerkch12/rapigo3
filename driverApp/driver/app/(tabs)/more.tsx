@@ -33,12 +33,13 @@ export default function MoreScreen() {
 
   const MENU_ITEMS = [
     { id: '1', title: 'My Profile', icon: 'person-outline', route: '/register-details' },
-    { id: '2', title: 'My Vehicles', icon: 'bicycle-outline' },
-    { id: '3', title: 'Bank Details', icon: 'card-outline' },
-    { id: '4', title: 'Documents', icon: 'document-text-outline' },
-    { id: '5', title: 'Refer & Earn', icon: 'gift-outline', isNew: true },
-    { id: '6', title: 'Privacy Policy', icon: 'shield-checkmark-outline' },
-    { id: '7', title: 'Terms & Conditions', icon: 'newspaper-outline' },
+    { id: '2', title: 'My Wallet', icon: 'wallet-outline', route: '/wallet' },
+    { id: '3', title: 'My Vehicles', icon: 'bicycle-outline' },
+    { id: '4', title: 'Bank Details', icon: 'card-outline' },
+    { id: '5', title: 'Documents', icon: 'document-text-outline' },
+    { id: '6', title: 'Refer & Earn', icon: 'gift-outline', isNew: true },
+    { id: '7', title: 'Privacy Policy', icon: 'shield-checkmark-outline' },
+    { id: '8', title: 'Terms & Conditions', icon: 'newspaper-outline' },
   ];
 
   return (

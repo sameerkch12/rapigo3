@@ -56,6 +56,28 @@ const rideSchema = new mongoose.Schema(
       select: false,
       required: true,
     },
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "online"],
+      default: "cash",
+    },
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "collected", "paid", "failed"],
+      default: "pending",
+    },
+    commission: {
+      type: Number,
+      default: 0,
+    },
+    driverEarning: {
+      type: Number,
+      default: 0,
+    },
+    walletUpdated: {
+      type: Boolean,
+      default: false,
+    },
     messages: [
       {
         msg: String,

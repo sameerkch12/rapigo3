@@ -55,7 +55,7 @@ module.exports.createRide = async (req, res) => {
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { pickup, destination, vehicleType } = req.body;
+  const { pickup, destination, vehicleType, paymentMethod } = req.body;
 
   try {
     const ride = await rideService.createRide({
@@ -63,6 +63,7 @@ module.exports.createRide = async (req, res) => {
       pickup,
       destination,
       vehicleType,
+      paymentMethod,
     });
 
     const user = await userModel.findOne({ _id: req.user._id });
